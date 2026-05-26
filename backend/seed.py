@@ -1,9 +1,11 @@
 import asyncio
+import os
+import sys
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
 from auth import get_password_hash
-from database import Base, async_session, engine
+from database import DATABASE_URL, Base, async_session, engine
 from models import Channel, ChannelMember, Message, User, UserRole
 
 DEFAULT_PASSWORD = "nanotronics123"
@@ -63,7 +65,47 @@ DIRECT_MESSAGES = [
 ]
 
 
+def _mask_database_url(url: str) -> str:
+    if "@" not in url:
+        return url
+    prefix, host_part = url.split("@", 1)
+    if "://" in prefix:
+        scheme, _ = prefix.split("://", 1)
+        return f"{scheme}://***@{host_part}"
+    return url
+
+
+async def wait_for_database(max_attempts: int = 30, delay_seconds: float = 2.0) -> None:
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            return
+        except Exception as exc:
+            if attempt == max_attempts:
+                raise RuntimeError(
+                    "No se pudo conectar a PostgreSQL después de varios intentos. "
+                    f"DATABASE_URL={_mask_database_url(DATABASE_URL)}. "
+                    "En Railway, vincula el servicio Postgres con "
+                    "DATABASE_URL=${{Postgres.DATABASE_URL}} en el servicio web."
+                ) from exc
+            print(f"Esperando PostgreSQL... intento {attempt}/{max_attempts}")
+            await asyncio.sleep(delay_seconds)
+
+
 async def seed(force: bool = False):
+    if "localhost" in DATABASE_URL and not (
+        os.getenv("DATABASE_URL")
+        or os.getenv("DATABASE_PUBLIC_URL")
+        or os.getenv("POSTGRES_URL")
+    ):
+        raise RuntimeError(
+            "DATABASE_URL no está configurada. Define la variable en Railway como "
+            "DATABASE_URL=${{Postgres.DATABASE_URL}}."
+        )
+
+    await wait_for_database()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -131,7 +173,5 @@ async def seed(force: bool = False):
 
 
 if __name__ == "__main__":
-    import sys
-
     force = "--force" in sys.argv
     asyncio.run(seed(force=force))

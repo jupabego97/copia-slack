@@ -116,7 +116,7 @@ El `Dockerfile` multistage:
 2. En [Railway](https://railway.app), crea un proyecto nuevo.
 3. Agrega un servicio **PostgreSQL**.
 4. Agrega un servicio desde el repo GitHub y selecciona el `Dockerfile` de la raíz.
-5. En el servicio web, configura variables:
+5. En el servicio **web** (no solo en Postgres), agrega estas variables:
 
 ```
 DATABASE_URL=${{Postgres.DATABASE_URL}}
@@ -126,15 +126,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES=480
 ALLOWED_ORIGINS=https://tu-dominio.up.railway.app
 ```
 
-6. Si Railway entrega `DATABASE_URL` con esquema `postgresql://`, cámbialo a `postgresql+asyncpg://`.
-7. Expón el puerto `8000` (Railway lo detecta con `PORT`).
-8. Tras el primer deploy, entra al contenedor o usa Railway CLI y ejecuta una sola vez:
+> **Importante:** `DATABASE_URL` debe estar en el servicio web. Si falta, la app intentará conectar a `localhost:5432` y fallará.
+> El backend convierte automáticamente `postgresql://` → `postgresql+asyncpg://`.
 
-```bash
-python seed.py
-```
-
-O reinicia el servicio: el seed es idempotente y no borra datos existentes.
+6. Expón el servicio web; Railway inyecta `PORT` automáticamente.
+7. Al arrancar, el contenedor ejecuta `seed.py` con reintentos y luego `uvicorn`. No necesitas correr el seed manualmente.
 
 ## API
 
