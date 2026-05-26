@@ -23,60 +23,72 @@ export default function LoginForm({ onLogin }) {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-main px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-sidebar p-8 shadow-2xl">
-        <div className="mb-8 text-center">
-          <h1 className="font-mono text-2xl font-bold tracking-wide text-accent">
-            NANOTRONICS
-          </h1>
-          <p className="mt-2 text-sm text-slate-400">Mensajería interna del equipo</p>
+    <div className="flex min-h-full items-center justify-center bg-sidebar px-4">
+      <div className="grid w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 shadow-2xl lg:grid-cols-2">
+        <div className="hidden flex-col justify-between bg-main p-10 lg:flex">
+          <div>
+            <h1 className="font-mono text-3xl font-bold tracking-wide text-accent">NANOTRONICS</h1>
+            <p className="mt-4 text-lg text-slate-300">Tu workspace de equipo</p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Canales por área, mensajes directos y avisos en tiempo real para todo el equipo.
+            </p>
+          </div>
+          <div className="space-y-2 text-sm text-slate-500">
+            <p># general · ventas · tecnico · compras</p>
+            <p>Contraseña demo: nanotronics123</p>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm text-slate-300" htmlFor="username">
-              Usuario
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-main px-3 py-2 text-slate-100 outline-none focus:border-accent"
-              placeholder="juan"
-              required
-            />
+        <div className="bg-sidebar p-8 sm:p-10">
+          <div className="mb-8 lg:hidden">
+            <h1 className="font-mono text-2xl font-bold tracking-wide text-accent">NANOTRONICS</h1>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-slate-300" htmlFor="password">
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-main px-3 py-2 text-slate-100 outline-none focus:border-accent"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <h2 className="text-xl font-semibold text-slate-100">Inicia sesión</h2>
+          <p className="mt-1 text-sm text-slate-400">Accede con tu usuario interno</p>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="username">
+                Usuario
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-main px-3 py-2.5 text-slate-100 outline-none ring-accent/40 focus:border-accent focus:ring-2"
+                placeholder="juan"
+                required
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-accent px-4 py-2 font-semibold text-slate-900 transition hover:brightness-110 disabled:opacity-60"
-          >
-            {loading ? "Ingresando..." : "Ingresar"}
-          </button>
-        </form>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="password">
+                Contraseña
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-main px-3 py-2.5 text-slate-100 outline-none ring-accent/40 focus:border-accent focus:ring-2"
+                placeholder="••••••••"
+                required
+              />
+            </div>
 
-        <p className="mt-6 text-center text-xs text-slate-500">
-          Usuarios demo: juan, carlos, laura, miguel, sofia, andres
-        </p>
+            {error && <p className="text-sm text-red-400">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-accent px-4 py-2.5 font-semibold text-slate-900 transition hover:brightness-110 disabled:opacity-60"
+            >
+              {loading ? "Ingresando..." : "Entrar al workspace"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ body,
 body {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .badge-gerencia {
@@ -35,4 +36,32 @@ body {
 
 .badge-ventas {
   @apply bg-violet-500/20 text-violet-300;
+}
+
+.channel-item {
+  @apply flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-[15px] transition;
+}
+
+.channel-item-active {
+  @apply bg-accent font-semibold text-slate-900;
+}
+
+.channel-item-idle {
+  @apply text-slate-300 hover:bg-white/5;
+}
+
+.message-row {
+  @apply relative flex gap-3 px-5 py-1 hover:bg-white/[0.03];
+}
+
+.message-row-first {
+  @apply mt-4 pt-2;
+}
+
+.avatar {
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-bold text-accent;
+}
+
+.composer-box {
+  @apply flex items-end gap-2 rounded-xl border border-white/10 bg-[#0f3460] px-4 py-3 shadow-lg;
 }

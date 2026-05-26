@@ -11,6 +11,18 @@ from schemas import ChannelOut, UserOut
 router = APIRouter(prefix="/api/channels", tags=["channels"])
 
 
+def _channel_to_out(channel: Channel) -> ChannelOut:
+    return ChannelOut(
+        id=channel.id,
+        name=channel.name,
+        slug=channel.slug,
+        description=channel.description,
+        is_direct_message=channel.is_direct_message,
+        created_at=channel.created_at,
+        members=[UserOut.model_validate(member.user) for member in channel.members],
+    )
+
+
 @router.get("", response_model=list[ChannelOut])
 async def list_channels(
     current_user: User = Depends(get_current_user),
@@ -26,12 +38,4 @@ async def list_channels(
         .order_by(Channel.is_direct_message.asc(), Channel.name.asc())
     )
     channels = result.scalars().unique().all()
-
-    response = []
-    for channel in channels:
-        members = [UserOut.model_validate(member.user) for member in channel.members]
-        channel_data = ChannelOut.model_validate(channel)
-        channel_data.members = members
-        response.append(channel_data)
-
-    return response
+    return [_channel_to_out(channel) for channel in channels]

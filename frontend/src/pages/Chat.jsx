@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import api from "../api.js";
+import api, { getErrorMessage } from "../api.js";
 import socket from "../socket.js";
 import MessageInput from "../components/MessageInput.jsx";
 import MessageList from "../components/MessageList.jsx";
@@ -7,7 +7,7 @@ import Sidebar from "../components/Sidebar.jsx";
 
 function getChannelTitle(channel, currentUserId) {
   if (!channel) return "Canal";
-  if (!channel.is_direct_message) return `#${channel.name}`;
+  if (!channel.is_direct_message) return channel.name;
   const other = channel.members?.find((member) => member.id !== currentUserId);
   return other?.display_name || channel.name;
 }
@@ -52,8 +52,10 @@ export default function Chat({ user, onLogout }) {
         activeChannelIdRef.current = initialId;
         setActiveChannelId(initialId);
       }
-    } catch {
-      setLoadError("No se pudieron cargar los canales. Revisa tu conexión.");
+    } catch (error) {
+      setLoadError(
+        getErrorMessage(error, "No se pudieron cargar los canales. Revisa tu conexión.")
+      );
     }
   }, []);
 
@@ -67,9 +69,11 @@ export default function Chat({ user, onLogout }) {
         params: { limit: 50 },
       });
       setMessages(response.data);
-    } catch {
+    } catch (error) {
       setMessages([]);
-      setLoadError("No se pudieron cargar los mensajes de este canal.");
+      setLoadError(
+        getErrorMessage(error, "No se pudieron cargar los mensajes de este canal.")
+      );
     } finally {
       setLoadingMessages(false);
     }
@@ -167,12 +171,7 @@ export default function Chat({ user, onLogout }) {
         return [...prev, response.data];
       });
     } catch (error) {
-      const detail = error.response?.data?.detail;
-      setSendError(
-        typeof detail === "string"
-          ? detail
-          : "No se pudo enviar el mensaje. Intenta de nuevo."
-      );
+      setSendError(getErrorMessage(error, "No se pudo enviar el mensaje."));
       throw error;
     }
   };
@@ -181,7 +180,7 @@ export default function Chat({ user, onLogout }) {
   const typingUsers = Object.values(typingByChannel[Number(activeChannelId)] || {});
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
       <Sidebar
         user={user}
         channels={regularChannels}
@@ -192,20 +191,25 @@ export default function Chat({ user, onLogout }) {
       />
 
       <main className="flex min-w-0 flex-1 flex-col bg-main">
-        <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-100">
+        <header className="flex h-12 shrink-0 items-center border-b border-white/10 px-5 shadow-sm">
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-bold text-slate-100">
+              {activeChannel?.is_direct_message ? "" : "#"}
               {getChannelTitle(activeChannel, user.id)}
             </h2>
-            {activeChannel?.description && !activeChannel?.is_direct_message && (
-              <p className="text-sm text-slate-400">{activeChannel.description}</p>
-            )}
           </div>
         </header>
 
         {loadError && (
-          <div className="border-b border-red-500/20 bg-red-500/10 px-6 py-2 text-sm text-red-300">
-            {loadError}
+          <div className="flex items-center justify-between gap-3 border-b border-red-500/20 bg-red-500/10 px-5 py-2 text-sm text-red-300">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={loadChannels}
+              className="shrink-0 rounded-md bg-red-500/20 px-3 py-1 text-xs font-medium hover:bg-red-500/30"
+            >
+              Reintentar
+            </button>
           </div>
         )}
 
@@ -219,6 +223,7 @@ export default function Chat({ user, onLogout }) {
 
         <MessageInput
           channelId={activeChannelId}
+          channelName={activeChannel?.is_direct_message ? null : activeChannel?.name}
           onSend={handleSend}
           readOnly={readOnly}
           typingUsers={typingUsers}

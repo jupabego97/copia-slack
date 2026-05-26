@@ -15,6 +15,15 @@ function formatTime(value) {
   });
 }
 
+function getInitials(name) {
+  return name
+    .split(" ")
+    .map((part) => part.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function groupMessages(messages) {
   const groups = [];
   let currentGroup = null;
@@ -68,56 +77,67 @@ export default function MessageList({ messages, currentUserId }) {
     container.scrollTop = container.scrollHeight;
   }, [messages]);
 
-  return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto px-6 py-4">
-      {groups.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-sm text-slate-500">
-          No hay mensajes todavía. ¡Sé el primero en escribir!
+  if (groups.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-2xl">
+          #
         </div>
-      ) : (
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <div key={`${group.senderId}-${group.messages[0].id}`}>
-              <div className="mb-2 flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/20 font-semibold text-accent">
-                  {group.sender.display_name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-100">
-                      {group.sender.display_name}
-                      {group.sender.id === currentUserId && (
-                        <span className="ml-1 text-xs text-slate-500">(tú)</span>
-                      )}
-                    </span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
-                        ROLE_BADGES[group.sender.role]
-                      }`}
-                    >
-                      {group.sender.role}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {formatTime(group.messages[0].created_at)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+        <p className="text-base font-semibold text-slate-200">Este canal está tranquilo</p>
+        <p className="mt-1 max-w-sm text-sm text-slate-500">
+          Sé el primero en escribir. Los mensajes del equipo aparecerán aquí.
+        </p>
+      </div>
+    );
+  }
 
-              <div className="ml-12 space-y-1">
-                {group.messages.map((message) => (
-                  <p
-                    key={message.id}
-                    className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-200"
-                  >
+  return (
+    <div ref={containerRef} className="flex-1 overflow-y-auto">
+      {groups.map((group) => (
+        <div key={`${group.senderId}-${group.messages[0].id}`}>
+          {group.messages.map((message, index) => {
+            const isFirst = index === 0;
+            return (
+              <div
+                key={message.id}
+                className={`group message-row ${isFirst ? "message-row-first" : ""}`}
+              >
+                {isFirst ? (
+                  <div className="avatar">{getInitials(group.sender.display_name)}</div>
+                ) : (
+                  <div className="w-9 shrink-0" />
+                )}
+
+                <div className="min-w-0 flex-1 pb-1">
+                  {isFirst && (
+                    <div className="mb-0.5 flex flex-wrap items-baseline gap-2">
+                      <span className="font-bold text-slate-100">
+                        {group.sender.display_name}
+                        {group.sender.id === currentUserId && (
+                          <span className="ml-1 text-xs font-normal text-slate-500">(tú)</span>
+                        )}
+                      </span>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
+                          ROLE_BADGES[group.sender.role]
+                        }`}
+                      >
+                        {group.sender.role}
+                      </span>
+                      <span className="text-xs text-slate-500 opacity-0 transition group-hover:opacity-100">
+                        {formatTime(message.created_at)}
+                      </span>
+                    </div>
+                  )}
+                  <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-200">
                     {message.content}
                   </p>
-                ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      )}
+      ))}
     </div>
   );
 }

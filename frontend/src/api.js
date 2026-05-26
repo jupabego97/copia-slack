@@ -12,4 +12,25 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+    }
+    return Promise.reject(error);
+  }
+);
+
+export function getErrorMessage(error, fallback) {
+  const detail = error.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((item) => item.msg || String(item)).join(", ");
+  }
+  if (error.response?.status === 401) return "Sesión expirada. Vuelve a iniciar sesión.";
+  if (!error.response) return "Sin conexión con el servidor.";
+  return fallback;
+}
+
 export default api;
