@@ -3,11 +3,17 @@ class SocketClient {
     this.ws = null;
     this.listeners = new Set();
     this.token = null;
+    this.reconnectTimer = null;
   }
 
   connect(token) {
-    if (this.ws && this.ws.readyState <= WebSocket.OPEN) {
-      return;
+    if (!token) return;
+
+    if (this.ws) {
+      const state = this.ws.readyState;
+      if (state === WebSocket.CONNECTING || state === WebSocket.OPEN) {
+        return;
+      }
     }
 
     this.token = token;
@@ -16,6 +22,13 @@ class SocketClient {
     const url = `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`;
 
     this.ws = new WebSocket(url);
+
+    this.ws.onopen = () => {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+    };
 
     this.ws.onmessage = (event) => {
       try {
@@ -26,16 +39,26 @@ class SocketClient {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
       this.ws = null;
+
+      if (event.code === 1008) {
+        this.token = null;
+        return;
+      }
+
       if (this.token) {
-        setTimeout(() => this.connect(this.token), 2000);
+        this.reconnectTimer = setTimeout(() => this.connect(this.token), 2000);
       }
     };
   }
 
   disconnect() {
     this.token = null;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -54,7 +77,8 @@ class SocketClient {
   }
 
   sendTyping(channelId) {
-    this.send({ type: "typing", channel_id: channelId });
+    if (!channelId) return;
+    this.send({ type: "typing", channel_id: Number(channelId) });
   }
 }
 

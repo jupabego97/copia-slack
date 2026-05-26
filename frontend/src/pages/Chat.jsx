@@ -5,13 +5,24 @@ import MessageInput from "../components/MessageInput.jsx";
 import MessageList from "../components/MessageList.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 
+function getChannelTitle(channel, currentUserId) {
+  if (!channel) return "Canal";
+  if (!channel.is_direct_message) return `#${channel.name}`;
+  const other = channel.members?.find((member) => member.id !== currentUserId);
+  return other?.display_name || channel.name;
+}
+
 export default function Chat({ user, onLogout }) {
   const [channels, setChannels] = useState([]);
   const [activeChannelId, setActiveChannelId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [sendError, setSendError] = useState("");
   const [typingByChannel, setTypingByChannel] = useState({});
   const typingTimers = useRef({});
+  const activeChannelIdRef = useRef(null);
+  const hasLoadedChannels = useRef(false);
 
   const activeChannel = useMemo(
     () => channels.find((channel) => channel.id === activeChannelId) || null,
@@ -29,21 +40,36 @@ export default function Chat({ user, onLogout }) {
   );
 
   const loadChannels = useCallback(async () => {
-    const response = await api.get("/api/channels");
-    setChannels(response.data);
-    if (!activeChannelId && response.data.length > 0) {
-      const general = response.data.find((channel) => channel.slug === "general");
-      setActiveChannelId((general || response.data[0]).id);
+    try {
+      setLoadError("");
+      const response = await api.get("/api/channels");
+      setChannels(response.data);
+
+      if (!hasLoadedChannels.current && response.data.length > 0) {
+        hasLoadedChannels.current = true;
+        const general = response.data.find((channel) => channel.slug === "general");
+        const initialId = (general || response.data[0]).id;
+        activeChannelIdRef.current = initialId;
+        setActiveChannelId(initialId);
+      }
+    } catch {
+      setLoadError("No se pudieron cargar los canales. Revisa tu conexión.");
     }
-  }, [activeChannelId]);
+  }, []);
 
   const loadMessages = useCallback(async (channelId) => {
+    if (!channelId) return;
+
     setLoadingMessages(true);
+    setSendError("");
     try {
       const response = await api.get(`/api/channels/${channelId}/messages`, {
         params: { limit: 50 },
       });
       setMessages(response.data);
+    } catch {
+      setMessages([]);
+      setLoadError("No se pudieron cargar los mensajes de este canal.");
     } finally {
       setLoadingMessages(false);
     }
@@ -54,6 +80,7 @@ export default function Chat({ user, onLogout }) {
   }, [loadChannels]);
 
   useEffect(() => {
+    activeChannelIdRef.current = activeChannelId;
     if (activeChannelId) {
       loadMessages(activeChannelId);
     }
@@ -61,8 +88,11 @@ export default function Chat({ user, onLogout }) {
 
   useEffect(() => {
     const unsubscribe = socket.subscribe((event) => {
+      const currentChannelId = activeChannelIdRef.current;
+
       if (event.type === "new_message") {
-        if (event.channel_id === activeChannelId) {
+        const channelId = Number(event.channel_id);
+        if (channelId === Number(currentChannelId)) {
           setMessages((prev) => {
             if (prev.some((message) => message.id === event.message.id)) {
               return prev;
@@ -87,12 +117,14 @@ export default function Chat({ user, onLogout }) {
         return;
       }
 
-      if (event.type === "typing" && event.channel_id) {
-        const key = `${event.channel_id}-${event.user_id}`;
+      if (event.type === "typing") {
+        const channelId = Number(event.channel_id);
+        const key = `${channelId}-${event.user_id}`;
+
         setTypingByChannel((prev) => ({
           ...prev,
-          [event.channel_id]: {
-            ...(prev[event.channel_id] || {}),
+          [channelId]: {
+            ...(prev[channelId] || {}),
             [event.user_id]: event.display_name,
           },
         }));
@@ -103,9 +135,9 @@ export default function Chat({ user, onLogout }) {
 
         typingTimers.current[key] = setTimeout(() => {
           setTypingByChannel((prev) => {
-            const channelTyping = { ...(prev[event.channel_id] || {}) };
+            const channelTyping = { ...(prev[channelId] || {}) };
             delete channelTyping[event.user_id];
-            return { ...prev, [event.channel_id]: channelTyping };
+            return { ...prev, [channelId]: channelTyping };
           });
           delete typingTimers.current[key];
         }, 2500);
@@ -113,24 +145,40 @@ export default function Chat({ user, onLogout }) {
     });
 
     return unsubscribe;
-  }, [activeChannelId]);
+  }, []);
 
-  const handleSend = async (content) => {
-    const response = await api.post(`/api/channels/${activeChannelId}/messages`, {
-      content,
-    });
-    setMessages((prev) => {
-      if (prev.some((message) => message.id === response.data.id)) {
-        return prev;
-      }
-      return [...prev, response.data];
-    });
+  const handleSelectChannel = (channelId) => {
+    setSendError("");
+    setLoadError("");
+    activeChannelIdRef.current = channelId;
+    setActiveChannelId(channelId);
   };
 
-  const readOnly =
-    activeChannel?.slug === "avisos" && user.role !== "gerencia";
+  const handleSend = async (content) => {
+    setSendError("");
+    try {
+      const response = await api.post(`/api/channels/${activeChannelId}/messages`, {
+        content,
+      });
+      setMessages((prev) => {
+        if (prev.some((message) => message.id === response.data.id)) {
+          return prev;
+        }
+        return [...prev, response.data];
+      });
+    } catch (error) {
+      const detail = error.response?.data?.detail;
+      setSendError(
+        typeof detail === "string"
+          ? detail
+          : "No se pudo enviar el mensaje. Intenta de nuevo."
+      );
+      throw error;
+    }
+  };
 
-  const typingUsers = Object.values(typingByChannel[activeChannelId] || {});
+  const readOnly = activeChannel?.slug === "avisos" && user.role !== "gerencia";
+  const typingUsers = Object.values(typingByChannel[Number(activeChannelId)] || {});
 
   return (
     <div className="flex h-full">
@@ -139,7 +187,7 @@ export default function Chat({ user, onLogout }) {
         channels={regularChannels}
         directMessages={directMessages}
         activeChannelId={activeChannelId}
-        onSelectChannel={setActiveChannelId}
+        onSelectChannel={handleSelectChannel}
         onLogout={onLogout}
       />
 
@@ -147,14 +195,19 @@ export default function Chat({ user, onLogout }) {
         <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">
-              {activeChannel?.is_direct_message ? "" : "#"}
-              {activeChannel?.name || "Canal"}
+              {getChannelTitle(activeChannel, user.id)}
             </h2>
-            {activeChannel?.description && (
+            {activeChannel?.description && !activeChannel?.is_direct_message && (
               <p className="text-sm text-slate-400">{activeChannel.description}</p>
             )}
           </div>
         </header>
+
+        {loadError && (
+          <div className="border-b border-red-500/20 bg-red-500/10 px-6 py-2 text-sm text-red-300">
+            {loadError}
+          </div>
+        )}
 
         {loadingMessages ? (
           <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
@@ -169,6 +222,7 @@ export default function Chat({ user, onLogout }) {
           onSend={handleSend}
           readOnly={readOnly}
           typingUsers={typingUsers}
+          error={sendError}
         />
       </main>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import socket from "../socket.js";
 
-export default function MessageInput({ channelId, onSend, readOnly = false, typingUsers = [] }) {
+export default function MessageInput({ channelId, onSend, readOnly = false, typingUsers = [], error = "" }) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const typingTimeout = useRef(null);
@@ -48,6 +48,8 @@ export default function MessageInput({ channelId, onSend, readOnly = false, typi
 
   return (
     <div className="border-t border-white/10 bg-main px-6 py-4">
+      {error && <p className="mb-2 text-sm text-red-400">{error}</p>}
+
       {typingLabel && (
         <p className="mb-2 text-xs italic text-accent">{typingLabel}</p>
       )}

@@ -12,6 +12,13 @@ class ConnectionManager:
         self.channel_members[channel_id] = user_ids
 
     async def connect(self, user_id: int, websocket: WebSocket):
+        previous = self.active_connections.get(user_id)
+        if previous is not None and previous is not websocket:
+            try:
+                await previous.close()
+            except Exception:
+                pass
+
         await websocket.accept()
         self.active_connections[user_id] = websocket
 

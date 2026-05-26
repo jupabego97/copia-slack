@@ -130,7 +130,7 @@ ALLOWED_ORIGINS=https://tu-dominio.up.railway.app
 > El backend convierte automáticamente `postgresql://` → `postgresql+asyncpg://`.
 
 6. Expón el servicio web; Railway inyecta `PORT` automáticamente.
-7. Al arrancar, el contenedor ejecuta `seed.py` con reintentos y luego `uvicorn`. No necesitas correr el seed manualmente.
+7. Al arrancar, FastAPI ejecuta el seed automáticamente en el lifespan (solo si la base está vacía) y luego levanta el servidor.
 
 ## API
 

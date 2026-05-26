@@ -25,47 +25,49 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
     async with async_session() as db:
         user = await get_user_from_token(token, db)
         if user is None:
-            await websocket.close(code=1008)
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Token inválido")
             return
 
         await _load_channel_memberships(db)
 
+        user_id = user.id
+        display_name = user.display_name
+
         user.is_online = True
         await db.commit()
-        await db.refresh(user)
 
-        await manager.connect(user.id, websocket)
+    await manager.connect(user_id, websocket)
+    await manager.broadcast({"type": "user_online", "user_id": user_id}, exclude_user_id=user_id)
 
-        await manager.broadcast({"type": "user_online", "user_id": user.id}, exclude_user_id=user.id)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            event_type = data.get("type")
 
-        try:
-            while True:
-                data = await websocket.receive_json()
-                event_type = data.get("type")
+            if event_type == "typing":
+                channel_id = data.get("channel_id")
+                if channel_id is not None:
+                    await manager.broadcast_to_channel(
+                        int(channel_id),
+                        {
+                            "type": "typing",
+                            "channel_id": int(channel_id),
+                            "user_id": user_id,
+                            "display_name": display_name,
+                        },
+                        exclude_user_id=user_id,
+                    )
+    except WebSocketDisconnect:
+        pass
+    finally:
+        manager.disconnect(user_id)
 
-                if event_type == "typing":
-                    channel_id = data.get("channel_id")
-                    if channel_id is not None:
-                        await manager.broadcast_to_channel(
-                            channel_id,
-                            {
-                                "type": "typing",
-                                "channel_id": channel_id,
-                                "user_id": user.id,
-                                "display_name": user.display_name,
-                            },
-                            exclude_user_id=user.id,
-                        )
-        except WebSocketDisconnect:
-            pass
-        finally:
-            manager.disconnect(user.id)
+        async with async_session() as session:
+            result = await session.execute(select(User).where(User.id == user_id))
+            db_user = result.scalar_one_or_none()
+            if db_user:
+                db_user.is_online = False
+                await session.commit()
 
-            async with async_session() as session:
-                result = await session.execute(select(User).where(User.id == user.id))
-                db_user = result.scalar_one_or_none()
-                if db_user:
-                    db_user.is_online = False
-                    await session.commit()
-
-            await manager.broadcast({"type": "user_offline", "user_id": user.id})
+        await manager.broadcast({"type": "user_offline", "user_id": user_id})

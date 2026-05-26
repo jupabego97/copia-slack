@@ -100,7 +100,7 @@ async def create_message(
     await manager.broadcast(
         {
             "type": "new_message",
-            "channel_id": channel_id,
+            "channel_id": int(channel_id),
             "message": message_out.model_dump(mode="json"),
         }
     )

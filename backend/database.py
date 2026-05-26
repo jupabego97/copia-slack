@@ -33,6 +33,7 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     connect_args=_connect_args,
+    pool_pre_ping=True,
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

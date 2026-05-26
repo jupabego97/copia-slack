@@ -29,7 +29,7 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": str(user_id), "exp": expire}
+    payload = {"sub": str(user_id), "exp": int(expire.timestamp())}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 

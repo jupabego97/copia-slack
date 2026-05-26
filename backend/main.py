@@ -9,19 +9,20 @@ from fastapi.staticfiles import StaticFiles
 
 from database import Base, engine
 from routers import auth, channels, messages, users, ws
+from seed import run_startup
 
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173",
-).split(",")
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await run_startup()
     yield
 
 
@@ -29,7 +30,8 @@ app = FastAPI(title="Nanotronics Chat", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.(railway\.app|up\.railway\.app)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,7 +56,7 @@ if STATIC_DIR.exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        if full_path.startswith("api/") or full_path.startswith("ws"):
+        if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
 
         file_path = STATIC_DIR / full_path
