@@ -7,89 +7,127 @@ export default function LoginForm({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError("");
     setLoading(true);
-
     try {
-      const response = await api.post("/api/auth/login", { username, password });
-      onLogin(response.data.user, response.data.access_token);
+      const res = await api.post("/api/auth/login", { username, password });
+      onLogin(res.data.user, res.data.access_token);
     } catch {
-      setError("Usuario o contraseña incorrectos");
+      setError("El nombre de usuario o la contraseña son incorrectos.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-sidebar px-4">
-      <div className="grid w-full max-w-4xl overflow-hidden rounded-2xl border border-white/10 shadow-2xl lg:grid-cols-2">
-        <div className="hidden flex-col justify-between bg-main p-10 lg:flex">
-          <div>
-            <h1 className="font-mono text-3xl font-bold tracking-wide text-accent">NANOTRONICS</h1>
-            <p className="mt-4 text-lg text-slate-300">Tu workspace de equipo</p>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Canales por área, mensajes directos y avisos en tiempo real para todo el equipo.
-            </p>
-          </div>
-          <div className="space-y-2 text-sm text-slate-500">
-            <p># general · ventas · tecnico · compras</p>
-            <p>Contraseña demo: nanotronics123</p>
-          </div>
+    <div
+      className="flex min-h-full flex-col items-center justify-center px-4 py-12"
+      style={{ background: "#1A1D21" }}
+    >
+      {/* Logo mark */}
+      <div className="mb-8 flex flex-col items-center">
+        <div
+          className="flex h-16 w-16 items-center justify-center rounded-2xl text-3xl font-black text-white shadow-2xl"
+          style={{ background: "#4A154B" }}
+        >
+          N
         </div>
+        <h1 className="mt-4 text-[28px] font-black text-white tracking-tight">
+          Nanotronics Chat
+        </h1>
+        <p className="mt-1 text-[15px] text-[#9B9EA4]">
+          Inicia sesión en tu workspace
+        </p>
+      </div>
 
-        <div className="bg-sidebar p-8 sm:p-10">
-          <div className="mb-8 lg:hidden">
-            <h1 className="font-mono text-2xl font-bold tracking-wide text-accent">NANOTRONICS</h1>
+      {/* Card */}
+      <div
+        className="w-full max-w-[400px] rounded-xl border border-[rgba(255,255,255,0.1)] p-8 shadow-2xl"
+        style={{ background: "#222529" }}
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="username"
+              className="mb-1.5 block text-[13px] font-bold text-[#D1D2D3]"
+            >
+              Usuario
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="juan"
+              required
+              autoFocus
+              className="w-full rounded-md border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] px-3 py-2.5 text-[15px] text-[#D1D2D3] outline-none placeholder:text-[#6B6F76] focus:border-[#1264A3] focus:ring-1 focus:ring-[#1264A3] transition"
+            />
           </div>
 
-          <h2 className="text-xl font-semibold text-slate-100">Inicia sesión</h2>
-          <p className="mt-1 text-sm text-slate-400">Accede con tu usuario interno</p>
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="username">
-                Usuario
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-main px-3 py-2.5 text-slate-100 outline-none ring-accent/40 focus:border-accent focus:ring-2"
-                placeholder="juan"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-300" htmlFor="password">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-main px-3 py-2.5 text-slate-100 outline-none ring-accent/40 focus:border-accent focus:ring-2"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            {error && <p className="text-sm text-red-400">{error}</p>}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-accent px-4 py-2.5 font-semibold text-slate-900 transition hover:brightness-110 disabled:opacity-60"
+          <div>
+            <label
+              htmlFor="password"
+              className="mb-1.5 block text-[13px] font-bold text-[#D1D2D3]"
             >
-              {loading ? "Ingresando..." : "Entrar al workspace"}
-            </button>
-          </form>
+              Contraseña
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              className="w-full rounded-md border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] px-3 py-2.5 text-[15px] text-[#D1D2D3] outline-none placeholder:text-[#6B6F76] focus:border-[#1264A3] focus:ring-1 focus:ring-[#1264A3] transition"
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-md bg-red-500/10 px-3 py-2.5 text-sm text-red-300">
+              <svg className="mt-0.5 h-4 w-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-2 w-full rounded-md py-2.5 text-[15px] font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+            style={{ background: "#4A154B" }}
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Iniciando sesión…
+              </span>
+            ) : (
+              "Iniciar sesión"
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6 border-t border-[rgba(255,255,255,0.08)] pt-5 text-center text-[13px] text-[#9B9EA4]">
+          <p>Usuarios disponibles:</p>
+          <p className="mt-1 font-mono text-[12px] text-[#D1D2D3]">
+            juan · carlos · laura · miguel · sofia · andres
+          </p>
+          <p className="mt-1 font-mono text-[12px] text-[#D1D2D3]">
+            Contraseña: <span className="text-[#2BAC76]">nanotronics123</span>
+          </p>
         </div>
       </div>
+
+      <p className="mt-6 text-[12px] text-[#6B6F76]">
+        © 2025 Nanotronics · Electrónica Colombia
+      </p>
     </div>
   );
 }

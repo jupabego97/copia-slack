@@ -1,56 +1,58 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api, { getErrorMessage } from "../api.js";
 import { getInitials } from "../utils/format.js";
 import { highlightText } from "../utils/highlight.jsx";
+
+const AVATAR_COLORS = [
+  ["#E01E5A", "#fff"], ["#ECB22E", "#1d1d1d"], ["#2EB67D", "#fff"],
+  ["#36C5F0", "#1d1d1d"], ["#E8612D", "#fff"], ["#9C51B6", "#fff"], ["#1264A3", "#fff"],
+];
+function avatarColor(name = "") {
+  return AVATAR_COLORS[(name.charCodeAt(0) || 0) % AVATAR_COLORS.length];
+}
 
 export default function NewMessageModal({ open, onClose, onOpenDm }) {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setUsers([]);
-      setError("");
-      return undefined;
-    }
+    if (!open) { setQuery(""); setUsers([]); setError(""); return; }
+    setTimeout(() => inputRef.current?.focus(), 50);
 
-    const loadUsers = async () => {
+    const load = async () => {
       setLoading(true);
       try {
-        const response = await api.get("/api/users");
-        setUsers(response.data);
+        const res = await api.get("/api/users");
+        setUsers(res.data);
       } catch (err) {
         setError(getErrorMessage(err, "No se pudieron cargar los usuarios."));
       } finally {
         setLoading(false);
       }
     };
+    load();
 
-    loadUsers();
-  }, [open]);
+    const esc = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [open, onClose]);
 
-  const filtered = users.filter((user) => {
-    const term = query.trim().toLowerCase();
-    if (!term) return true;
-    return (
-      user.display_name.toLowerCase().includes(term) ||
-      user.username.toLowerCase().includes(term)
-    );
+  const filtered = users.filter((u) => {
+    const t = query.trim().toLowerCase();
+    return !t || u.display_name.toLowerCase().includes(t) || u.username.toLowerCase().includes(t);
   });
 
   const handleSelect = async (userId) => {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
-      const response = await api.post(`/api/users/${userId}/dm`);
-      onOpenDm(response.data);
+      const res = await api.post(`/api/users/${userId}/dm`);
+      onOpenDm(res.data);
       onClose();
     } catch (err) {
       setError(getErrorMessage(err, "No se pudo abrir el mensaje directo."));
-    } finally {
       setLoading(false);
     }
   };
@@ -58,50 +60,84 @@ export default function NewMessageModal({ open, onClose, onOpenDm }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-sidebar shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-100">Nuevo mensaje directo</h3>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200">
-            Esc
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 px-4 pt-[10vh]"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-[480px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.13)] shadow-2xl"
+        style={{ background: "#222529" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.1)] px-4 py-3">
+          <h3 className="text-[15px] font-extrabold text-white">Nuevo mensaje directo</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded text-[#9B9EA4] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
-        <div className="border-b border-white/10 px-4 py-3">
+        {/* Search */}
+        <div className="flex items-center gap-2 border-b border-[rgba(255,255,255,0.1)] px-4 py-2.5">
+          <span className="text-[13px] font-bold text-[#9B9EA4]">Para:</span>
           <input
-            autoFocus
+            ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar persona..."
-            className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar persona"
+            className="flex-1 bg-transparent text-[14px] text-[#D1D2D3] outline-none placeholder:text-[#6B6F76]"
           />
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-2">
-          {loading && <p className="px-3 py-4 text-sm text-slate-400">Cargando...</p>}
+        {/* User list */}
+        <div className="max-h-[360px] overflow-y-auto p-2">
+          {loading && !users.length && (
+            <div className="flex justify-center py-6">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[rgba(255,255,255,0.1)] border-t-[#9B9EA4]" />
+            </div>
+          )}
           {error && <p className="px-3 py-4 text-sm text-red-400">{error}</p>}
-          {!loading &&
-            filtered.map((user) => (
+
+          {filtered.map((u) => {
+            const [bg, fg] = avatarColor(u.display_name);
+            return (
               <button
-                key={user.id}
+                key={u.id}
                 type="button"
-                onClick={() => handleSelect(user.id)}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-white/5"
+                onClick={() => handleSelect(u.id)}
+                disabled={loading}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[rgba(255,255,255,0.06)] transition disabled:opacity-50"
               >
-                <span className="avatar text-xs">{getInitials(user.display_name)}</span>
-                <div>
-                  <p className="text-sm text-slate-100">
-                    {highlightText(user.display_name, query)}
-                  </p>
-                  <p className="text-xs text-slate-500">@{user.username}</p>
+                <div className="relative shrink-0">
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[12px] font-black"
+                    style={{ background: bg, color: fg }}
+                  >
+                    {getInitials(u.display_name)}
+                  </span>
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#222529] ${
+                      u.is_online ? "bg-[#2BAC76]" : "bg-[#6B6F76]"
+                    }`}
+                  />
                 </div>
-                <span
-                  className={`ml-auto h-2.5 w-2.5 rounded-full ${
-                    user.is_online ? "bg-emerald-400" : "bg-slate-600"
-                  }`}
-                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold text-[#D1D2D3]">
+                    {highlightText(u.display_name, query)}
+                  </p>
+                  <p className="text-[12px] text-[#9B9EA4]">@{u.username}</p>
+                </div>
+                <span className={`text-[12px] font-medium ${u.is_online ? "text-[#2BAC76]" : "text-[#6B6F76]"}`}>
+                  {u.is_online ? "Activo" : "Ausente"}
+                </span>
               </button>
-            ))}
+            );
+          })}
         </div>
       </div>
     </div>

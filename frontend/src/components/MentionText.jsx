@@ -1,17 +1,17 @@
 const MENTION_REGEX = /(@[a-zA-Z0-9_]+)/g;
 
-export default function MentionText({ text }) {
+export default function MentionText({ text, currentUserId }) {
   const parts = text.split(MENTION_REGEX);
 
   return (
     <>
-      {parts.map((part, index) =>
+      {parts.map((part, i) =>
         part.startsWith("@") ? (
-          <span key={index} className="rounded bg-accent/15 px-1 font-medium text-accent">
+          <span key={i} className="mention">
             {part}
           </span>
         ) : (
-          <span key={index}>{part}</span>
+          <span key={i}>{part}</span>
         )
       )}
     </>

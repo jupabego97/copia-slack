@@ -1,112 +1,180 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import api from "../api.js";
 import MentionText from "./MentionText.jsx";
 import { formatRelativeDate, formatTime, getInitials } from "../utils/format.js";
 
-const ROLE_BADGES = {
-  gerencia: "badge-gerencia",
-  tecnico: "badge-tecnico",
-  marketing: "badge-marketing",
-  compras: "badge-compras",
-  ventas: "badge-ventas",
-};
+// ── Avatar colors (consistent per user) ──────────────────────
+const AVATAR_COLORS = [
+  ["#E01E5A", "#fff"],
+  ["#ECB22E", "#1d1d1d"],
+  ["#2EB67D", "#fff"],
+  ["#36C5F0", "#1d1d1d"],
+  ["#E8612D", "#fff"],
+  ["#CC4400", "#fff"],
+  ["#9C51B6", "#fff"],
+  ["#1264A3", "#fff"],
+];
+function avatarColor(name = "") {
+  const idx = (name.charCodeAt(0) || 0) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[idx];
+}
 
+// ── Group consecutive messages by same author (within 5 min) ─
 function groupMessages(messages) {
   const groups = [];
-  let currentGroup = null;
-
-  messages.forEach((message) => {
-    const sameAuthor =
-      currentGroup &&
-      currentGroup.senderId === message.sender_id &&
-      new Date(message.created_at) - new Date(currentGroup.lastCreatedAt) < 5 * 60 * 1000;
-
-    if (sameAuthor) {
-      currentGroup.messages.push(message);
-      currentGroup.lastCreatedAt = message.created_at;
+  let cur = null;
+  messages.forEach((msg) => {
+    const same =
+      cur &&
+      cur.senderId === msg.sender_id &&
+      new Date(msg.created_at) - new Date(cur.lastAt) < 5 * 60 * 1000;
+    if (same) {
+      cur.messages.push(msg);
+      cur.lastAt = msg.created_at;
     } else {
-      currentGroup = {
-        senderId: message.sender_id,
-        sender: message.sender,
-        messages: [message],
-        lastCreatedAt: message.created_at,
-      };
-      groups.push(currentGroup);
+      cur = { senderId: msg.sender_id, sender: msg.sender, messages: [msg], lastAt: msg.created_at };
+      groups.push(cur);
     }
   });
-
   return groups;
 }
 
 function groupByDate(messages) {
   const sections = [];
-  let currentDate = null;
-  let currentGroups = [];
-
-  groupMessages(messages).forEach((group) => {
-    const dateKey = new Date(group.messages[0].created_at).toDateString();
-    if (dateKey !== currentDate) {
-      if (currentGroups.length > 0) {
-        sections.push({ date: currentDate, groups: currentGroups });
-      }
-      currentDate = dateKey;
-      currentGroups = [group];
+  let curDate = null, curGroups = [];
+  groupMessages(messages).forEach((g) => {
+    const d = new Date(g.messages[0].created_at).toDateString();
+    if (d !== curDate) {
+      if (curGroups.length) sections.push({ date: curDate, groups: curGroups });
+      curDate = d; curGroups = [g];
     } else {
-      currentGroups.push(group);
+      curGroups.push(g);
     }
   });
-
-  if (currentGroups.length > 0) {
-    sections.push({ date: currentDate, groups: currentGroups });
-  }
-
+  if (curGroups.length) sections.push({ date: curDate, groups: curGroups });
   return sections;
+}
+
+// ── Hover action toolbar ──────────────────────────────────────
+function MessageActions({ message, isMine, onEdit, onDelete }) {
+  return (
+    <div className="msg-actions">
+      {/* React with emoji */}
+      <button type="button" className="msg-action-btn" title="Reaccionar">
+        <span>😊</span>
+      </button>
+      {/* Reply / thread placeholder */}
+      <button type="button" className="msg-action-btn" title="Responder">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        </svg>
+      </button>
+      {isMine && (
+        <>
+          <button type="button" className="msg-action-btn" title="Editar" onClick={() => onEdit(message)}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+          <button type="button" className="msg-action-btn" title="Eliminar" onClick={() => onDelete(message.id)}>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Edit inline ───────────────────────────────────────────────
+function EditInput({ initialContent, onSave, onCancel }) {
+  const [value, setValue] = useState(initialContent);
+  const ref = useRef(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSave(value.trim()); }
+    if (e.key === "Escape") onCancel();
+  };
+
+  return (
+    <div className="mt-1">
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        rows={Math.max(1, value.split("\n").length)}
+        className="w-full resize-none rounded-md border border-[#1264A3] bg-[#222529] px-3 py-2 text-[15px] leading-6 text-[#D1D2D3] outline-none"
+      />
+      <div className="mt-1 flex items-center gap-2 text-xs text-[#9B9EA4]">
+        <span>Esc para cancelar ·</span>
+        <button type="button" onClick={() => onSave(value.trim())} className="text-[#1D9BD1] hover:underline">
+          Guardar cambios
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function MessageList({ messages, currentUserId }) {
   const containerRef = useRef(null);
-  const shouldStickToBottom = useRef(true);
-  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const shouldStick = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const sections = useMemo(() => groupByDate(messages), [messages]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleScroll = () => {
-      const distanceFromBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight;
-      shouldStickToBottom.current = distanceFromBottom < 80;
-      setShowJumpToBottom(distanceFromBottom > 160);
+    const el = containerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      shouldStick.current = dist < 80;
+      setShowJump(dist > 200);
     };
-
-    container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !shouldStickToBottom.current) return;
-    container.scrollTop = container.scrollHeight;
+    const el = containerRef.current;
+    if (!el || !shouldStick.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   const jumpToBottom = () => {
-    const container = containerRef.current;
-    if (!container) return;
-    container.scrollTop = container.scrollHeight;
-    shouldStickToBottom.current = true;
-    setShowJumpToBottom(false);
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    shouldStick.current = true;
+    setShowJump(false);
+  };
+
+  const handleEdit = async (msgId, newContent) => {
+    if (!newContent) return;
+    try {
+      await api.patch(`/api/messages/${msgId}`, { content: newContent });
+    } catch {/* error handled by WS update */}
+    setEditingId(null);
+  };
+
+  const handleDelete = async (msgId) => {
+    try {
+      await api.delete(`/api/messages/${msgId}`);
+    } catch {/* silent */}
   };
 
   if (messages.length === 0) {
     return (
-      <div className="relative flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-2xl">
+      <div className="flex flex-1 flex-col items-start justify-end px-5 pb-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[rgba(255,255,255,0.06)] text-3xl">
           #
         </div>
-        <p className="text-base font-semibold text-slate-200">Este canal está tranquilo</p>
-        <p className="mt-1 max-w-sm text-sm text-slate-500">
-          Escribe el primer mensaje o menciona a alguien con @usuario.
+        <h3 className="mt-4 text-2xl font-black text-white">Este canal está tranquilo</h3>
+        <p className="mt-1 text-sm text-[#9B9EA4]">
+          Sé el primero en escribir. Usa <span className="font-semibold text-[#D1D2D3]">@usuario</span> para mencionar a alguien.
         </p>
       </div>
     );
@@ -117,70 +185,101 @@ export default function MessageList({ messages, currentUserId }) {
       <div ref={containerRef} className="absolute inset-0 overflow-y-auto">
         {sections.map((section) => (
           <div key={section.date}>
-            <div className="sticky top-0 z-10 flex justify-center py-4">
-              <span className="rounded-full border border-white/10 bg-main/95 px-3 py-1 text-xs text-slate-400">
-                {formatRelativeDate(section.groups[0].messages[0].created_at)}
-              </span>
+            {/* ── Date divider ── */}
+            <div className="date-divider">
+              <span>{formatRelativeDate(section.groups[0].messages[0].created_at)}</span>
             </div>
 
-            {section.groups.map((group) => (
-              <div key={`${group.senderId}-${group.messages[0].id}`}>
-                {group.messages.map((message, index) => {
-                  const isFirst = index === 0;
-                  return (
-                    <div
-                      key={message.id}
-                      className={`group message-row ${isFirst ? "message-row-first" : ""}`}
-                    >
-                      {isFirst ? (
-                        <div className="avatar">{getInitials(group.sender.display_name)}</div>
-                      ) : (
-                        <div className="w-9 shrink-0" />
-                      )}
+            {section.groups.map((group) => {
+              const [bgColor, fgColor] = avatarColor(group.sender.display_name);
+              return (
+                <div key={`${group.senderId}-${group.messages[0].id}`}>
+                  {group.messages.map((msg, idx) => {
+                    const isFirst = idx === 0;
+                    const isMine = msg.sender_id === currentUserId;
+                    const isEditing = editingId === msg.id;
 
-                      <div className="min-w-0 flex-1 pb-1">
-                        {isFirst && (
-                          <div className="mb-0.5 flex flex-wrap items-baseline gap-2">
-                            <span className="font-bold text-slate-100">
-                              {group.sender.display_name}
-                              {group.sender.id === currentUserId && (
-                                <span className="ml-1 text-xs font-normal text-slate-500">(tú)</span>
-                              )}
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`message-row group ${isFirst ? "message-row-first" : ""}`}
+                      >
+                        {/* Avatar or time gutter */}
+                        {isFirst ? (
+                          <span
+                            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[13px] font-black"
+                            style={{ background: bgColor, color: fgColor }}
+                          >
+                            {getInitials(group.sender.display_name)}
+                          </span>
+                        ) : (
+                          <span className="flex h-6 w-9 shrink-0 items-end justify-center">
+                            <span className="hidden pb-0.5 text-[11px] leading-none text-[#6B6F76] group-hover:block">
+                              {formatTime(msg.created_at)}
                             </span>
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
-                                ROLE_BADGES[group.sender.role]
-                              }`}
-                            >
-                              {group.sender.role}
-                            </span>
-                            <span className="text-xs text-slate-500 opacity-0 transition group-hover:opacity-100">
-                              {formatTime(message.created_at)}
-                            </span>
-                          </div>
+                          </span>
                         )}
-                        <p className="whitespace-pre-wrap break-words text-[15px] leading-6 text-slate-200">
-                          <MentionText text={message.content} />
-                        </p>
-                        {message.edited_at && (
-                          <span className="text-xs text-slate-500">(editado)</span>
+
+                        {/* Content */}
+                        <div className="min-w-0 flex-1 pb-0.5">
+                          {isFirst && (
+                            <div className="flex flex-wrap items-baseline gap-2 leading-none">
+                              <span className="text-[15px] font-extrabold text-white hover:underline cursor-pointer">
+                                {group.sender.display_name}
+                              </span>
+                              <span className="text-[12px] text-[#9B9EA4]">
+                                {formatTime(msg.created_at)}
+                              </span>
+                            </div>
+                          )}
+
+                          {isEditing ? (
+                            <EditInput
+                              initialContent={msg.content}
+                              onSave={(v) => handleEdit(msg.id, v)}
+                              onCancel={() => setEditingId(null)}
+                            />
+                          ) : (
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[22px] text-[#D1D2D3]">
+                              <MentionText text={msg.content} currentUserId={currentUserId} />
+                              {msg.edited_at && (
+                                <span className="ml-1 text-xs text-[#6B6F76]">(editado)</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Hover action bar */}
+                        {!isEditing && (
+                          <MessageActions
+                            message={msg}
+                            isMine={isMine}
+                            onEdit={() => setEditingId(msg.id)}
+                            onDelete={handleDelete}
+                          />
                         )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         ))}
+
+        {/* Bottom padding */}
+        <div className="h-4" />
       </div>
 
-      {showJumpToBottom && (
+      {showJump && (
         <button
           type="button"
           onClick={jumpToBottom}
-          className="absolute bottom-4 right-6 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-slate-900 shadow-lg"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] px-4 py-2 text-[13px] font-semibold text-[#D1D2D3] shadow-xl hover:bg-[#222529] transition"
         >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
           Ir al último mensaje
         </button>
       )}

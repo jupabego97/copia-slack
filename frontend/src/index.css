@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,59 +16,118 @@ body,
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, sans-serif;
+  font-family:
+    "Lato",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    sans-serif;
   -webkit-font-smoothing: antialiased;
-  background: #16213e;
+  background: #1a1d21;
+  color: #d1d2d3;
 }
 
-.badge-gerencia {
-  @apply bg-emerald-500/20 text-emerald-300;
+/* ─── Scrollbar Slack-style ─────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
-.badge-tecnico {
-  @apply bg-blue-500/20 text-blue-300;
-}
+/* ─── Role badges ────────────────────────────────────────── */
+.badge-gerencia  { @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold bg-emerald-500/20 text-emerald-300; }
+.badge-tecnico   { @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold bg-blue-500/20 text-blue-300; }
+.badge-marketing { @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold bg-pink-500/20 text-pink-300; }
+.badge-compras   { @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold bg-orange-500/20 text-orange-300; }
+.badge-ventas    { @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-bold bg-violet-500/20 text-violet-300; }
 
-.badge-marketing {
-  @apply bg-pink-500/20 text-pink-300;
-}
-
-.badge-compras {
-  @apply bg-orange-500/20 text-orange-300;
-}
-
-.badge-ventas {
-  @apply bg-violet-500/20 text-violet-300;
-}
-
+/* ─── Sidebar items ──────────────────────────────────────── */
 .channel-item {
-  @apply flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-[15px] transition;
+  @apply flex w-full items-center gap-1.5 rounded-md px-2 py-[5px] text-left text-[15px] transition-colors duration-75 select-none;
 }
-
 .channel-item-active {
-  @apply bg-accent font-semibold text-slate-900;
+  @apply bg-[rgba(255,255,255,0.16)] font-bold text-white;
 }
-
 .channel-item-idle {
-  @apply text-slate-300 hover:bg-white/5;
+  @apply font-normal text-[#C9B4CA] hover:bg-[rgba(255,255,255,0.08)] hover:text-white;
+}
+.channel-item-idle.has-unread {
+  @apply font-bold text-white;
 }
 
-.message-row {
-  @apply relative flex gap-3 px-5 py-1 hover:bg-white/[0.03];
-}
-
-.message-row-first {
-  @apply mt-2 pt-2;
-}
-
+/* ─── Avatar ─────────────────────────────────────────────── */
 .avatar {
-  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-sm font-bold text-accent;
+  @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold;
+  /* color set dynamically via style prop */
+}
+.avatar-sm {
+  @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-bold;
 }
 
+/* ─── Message row ────────────────────────────────────────── */
+.message-row {
+  @apply relative flex gap-3 px-5 py-[3px];
+}
+.message-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.message-row-first {
+  @apply mt-3;
+}
+
+/* ─── Composer ───────────────────────────────────────────── */
 .composer-box {
-  @apply flex items-end gap-2 rounded-xl border border-white/10 bg-[#0f3460] px-4 py-3 shadow-lg;
+  @apply rounded-lg border border-[rgba(255,255,255,0.15)] bg-[#222529] overflow-hidden;
+}
+
+/* ─── Date divider ───────────────────────────────────────── */
+.date-divider {
+  @apply flex items-center gap-3 px-5 py-3;
+}
+.date-divider::before,
+.date-divider::after {
+  content: "";
+  @apply flex-1 h-px bg-[rgba(255,255,255,0.1)];
+}
+.date-divider span {
+  @apply text-xs font-bold text-[#9B9EA4] whitespace-nowrap px-1;
+}
+
+/* ─── Hover action toolbar ───────────────────────────────── */
+.msg-actions {
+  @apply absolute right-4 -top-4 hidden items-center rounded-md border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] shadow-lg;
+}
+.message-row:hover .msg-actions {
+  @apply flex;
+}
+.msg-action-btn {
+  @apply flex h-8 w-8 items-center justify-center text-base text-[#9B9EA4] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors;
+}
+.msg-action-btn:first-child {
+  @apply rounded-l-md;
+}
+.msg-action-btn:last-child {
+  @apply rounded-r-md;
+}
+
+/* ─── Mention highlight ──────────────────────────────────── */
+.mention {
+  @apply rounded bg-[#1264A3]/30 px-0.5 text-[#1D9BD1] font-bold cursor-pointer hover:bg-[#1264A3]/50;
+}
+.mention-self {
+  @apply rounded bg-[#F7C948]/20 px-0.5 text-[#F7C948] font-bold;
 }
 
 mark {
-  background: transparent;
+  @apply bg-yellow-400/30 text-yellow-200 rounded px-0.5;
 }
