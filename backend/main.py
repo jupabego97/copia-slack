@@ -2,13 +2,14 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from database import Base, engine
-from routers import auth, channels, messages, users, ws
+from routers import auth, channels, dms, message_actions, messages, notifications, search, users, ws
 from seed import run_startup
 
 ALLOWED_ORIGINS = [
@@ -28,6 +29,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Nanotronics Chat", lifespan=lifespan)
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_request: Request, exc: RequestValidationError):
+    detail = exc.errors()[0].get("msg", "Datos inválidos") if exc.errors() else "Datos inválidos"
+    return JSONResponse(status_code=422, content={"detail": detail})
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -40,7 +53,11 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(channels.router)
 app.include_router(messages.router)
+app.include_router(message_actions.router)
+app.include_router(dms.router)
 app.include_router(users.router)
+app.include_router(search.router)
+app.include_router(notifications.router)
 app.include_router(ws.router)
 
 

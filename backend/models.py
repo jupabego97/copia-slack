@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -25,6 +26,10 @@ class UserRole(str, enum.Enum):
     ventas = "ventas"
 
 
+class NotificationType(str, enum.Enum):
+    mention = "mention"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -40,6 +45,8 @@ class User(Base):
 
     messages: Mapped[list["Message"]] = relationship(back_populates="sender")
     channel_memberships: Mapped[list["ChannelMember"]] = relationship(back_populates="user")
+    read_states: Mapped[list["ChannelReadState"]] = relationship(back_populates="user")
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
 
 
 class Channel(Base):
@@ -56,6 +63,7 @@ class Channel(Base):
 
     members: Mapped[list["ChannelMember"]] = relationship(back_populates="channel")
     messages: Mapped[list["Message"]] = relationship(back_populates="channel")
+    read_states: Mapped[list["ChannelReadState"]] = relationship(back_populates="channel")
 
 
 class ChannelMember(Base):
@@ -70,17 +78,54 @@ class ChannelMember(Base):
     user: Mapped["User"] = relationship(back_populates="channel_memberships")
 
 
+class ChannelReadState(Base):
+    __tablename__ = "channel_read_states"
+    __table_args__ = (UniqueConstraint("user_id", "channel_id", name="uq_user_channel_read"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    last_read_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="read_states")
+    channel: Mapped["Channel"] = relationship(back_populates="read_states")
+
+
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (Index("ix_messages_channel_created", "channel_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     channel: Mapped["Channel"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(back_populates="messages")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), nullable=False)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    type: Mapped[NotificationType] = mapped_column(Enum(NotificationType), nullable=False)
+    content: Mapped[str] = mapped_column(String(500), nullable=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="notifications", foreign_keys=[user_id])

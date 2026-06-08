@@ -1,38 +1,23 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from auth import get_current_user
-from connection_manager import manager
 from database import get_db
-from models import Channel, ChannelMember, Message, User, UserRole
-from schemas import MessageCreate, MessageOut, UserOut
+from models import Message, User, UserRole
+from schemas import MessageCreate, MessageOut, MessageUpdate
+from services.chat import (
+    create_mention_notifications,
+    emit_new_message,
+    emit_notification,
+    get_member_channel,
+    message_to_out,
+)
 
 router = APIRouter(prefix="/api/channels", tags=["messages"])
-
-
-async def _get_member_channel(
-    channel_id: int, user_id: int, db: AsyncSession
-) -> Channel | None:
-    result = await db.execute(
-        select(Channel)
-        .join(ChannelMember, ChannelMember.channel_id == Channel.id)
-        .where(and_(Channel.id == channel_id, ChannelMember.user_id == user_id))
-    )
-    return result.scalar_one_or_none()
-
-
-def _message_to_out(message: Message) -> MessageOut:
-    return MessageOut(
-        id=message.id,
-        channel_id=message.channel_id,
-        sender_id=message.sender_id,
-        content=message.content,
-        created_at=message.created_at,
-        edited_at=message.edited_at,
-        sender=UserOut.model_validate(message.sender),
-    )
 
 
 @router.get("/{channel_id}/messages", response_model=list[MessageOut])
@@ -43,7 +28,7 @@ async def get_messages(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    channel = await _get_member_channel(channel_id, current_user.id, db)
+    channel = await get_member_channel(channel_id, current_user.id, db)
     if channel is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canal no encontrado")
 
@@ -60,7 +45,7 @@ async def get_messages(
 
     result = await db.execute(query)
     messages = list(reversed(result.scalars().all()))
-    return [_message_to_out(message) for message in messages]
+    return [message_to_out(message) for message in messages]
 
 
 @router.post("/{channel_id}/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
@@ -74,7 +59,7 @@ async def create_message(
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El mensaje no puede estar vacío")
 
-    channel = await _get_member_channel(channel_id, current_user.id, db)
+    channel = await get_member_channel(channel_id, current_user.id, db)
     if channel is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Canal no encontrado")
 
@@ -96,13 +81,9 @@ async def create_message(
     )
     message = result.scalar_one()
 
-    message_out = _message_to_out(message)
-    await manager.broadcast(
-        {
-            "type": "new_message",
-            "channel_id": int(channel_id),
-            "message": message_out.model_dump(mode="json"),
-        }
-    )
+    notifications = await create_mention_notifications(db, message, current_user, content)
+    for notification in notifications:
+        await emit_notification(notification, current_user)
 
-    return message_out
+    await emit_new_message(message)
+    return message_to_out(message)

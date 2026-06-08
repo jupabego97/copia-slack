@@ -138,10 +138,19 @@ ALLOWED_ORIGINS=https://tu-dominio.up.railway.app
 |---|---|---|
 | POST | `/api/auth/login` | Login JWT |
 | GET | `/api/auth/me` | Usuario actual |
-| GET | `/api/channels` | Canales del usuario |
+| GET | `/api/channels` | Canales del usuario con no leídos y último mensaje |
+| POST | `/api/channels/{id}/read` | Marcar canal como leído |
 | GET | `/api/channels/{id}/messages` | Historial paginado |
-| POST | `/api/channels/{id}/messages` | Enviar mensaje |
-| GET | `/api/users` | Usuarios y estado online |
+| POST | `/api/channels/{id}/messages` | Enviar mensaje (con menciones `@usuario`) |
+| PATCH | `/api/messages/{id}` | Editar mensaje |
+| DELETE | `/api/messages/{id}` | Eliminar mensaje |
+| GET | `/api/users` | Usuarios con presencia online |
+| POST | `/api/users/{id}/dm` | Abrir o crear DM |
+| GET | `/api/search?q=` | Buscar canales, usuarios y mensajes |
+| GET | `/api/notifications` | Notificaciones del usuario |
+| GET | `/api/notifications/unread-count` | Contador de no leídas |
+| POST | `/api/notifications/{id}/read` | Marcar notificación |
+| POST | `/api/notifications/read-all` | Marcar todas como leídas |
 | WS | `/ws?token=JWT` | Eventos en tiempo real |
 
 ## WebSocket
@@ -150,6 +159,9 @@ Eventos del servidor:
 
 ```json
 { "type": "new_message", "channel_id": 1, "message": { } }
+{ "type": "message_updated", "channel_id": 1, "message": { } }
+{ "type": "message_deleted", "channel_id": 1, "message_id": 10 }
+{ "type": "notification", "notification": { } }
 { "type": "user_online", "user_id": 2 }
 { "type": "user_offline", "user_id": 2 }
 { "type": "typing", "channel_id": 1, "user_id": 2, "display_name": "Carlos" }

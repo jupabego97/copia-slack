@@ -16,6 +16,7 @@ body {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background: #16213e;
 }
 
 .badge-gerencia {
@@ -55,7 +56,7 @@ body {
 }
 
 .message-row-first {
-  @apply mt-4 pt-2;
+  @apply mt-2 pt-2;
 }
 
 .avatar {
@@ -64,4 +65,8 @@ body {
 
 .composer-box {
   @apply flex items-end gap-2 rounded-xl border border-white/10 bg-[#0f3460] px-4 py-3 shadow-lg;
+}
+
+mark {
+  background: transparent;
 }
