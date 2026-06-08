@@ -46,7 +46,10 @@ class User(Base):
     messages: Mapped[list["Message"]] = relationship(back_populates="sender")
     channel_memberships: Mapped[list["ChannelMember"]] = relationship(back_populates="user")
     read_states: Mapped[list["ChannelReadState"]] = relationship(back_populates="user")
-    notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
+    notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="user",
+        foreign_keys="Notification.user_id",
+    )
 
 
 class Channel(Base):
@@ -128,4 +131,8 @@ class Notification(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship(back_populates="notifications", foreign_keys=[user_id])
+    user: Mapped["User"] = relationship(
+        back_populates="notifications",
+        foreign_keys=[user_id],
+    )
+    actor: Mapped["User"] = relationship(foreign_keys=[actor_id])
