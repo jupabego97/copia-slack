@@ -28,13 +28,16 @@ _LOGIN_WINDOW_SECONDS = 60
 
 
 def assert_secure_secret() -> None:
-    """Warn or fail when SECRET_KEY is unsafe in deployed environments."""
-    is_deployed = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PORT"))
-    if SECRET_KEY in _INSECURE_DEFAULTS:
-        msg = "SECRET_KEY insegura o por defecto. Define una clave larga y aleatoria."
-        if is_deployed:
-            raise RuntimeError(msg)
-        print(f"ADVERTENCIA: {msg}")
+    """Warn when SECRET_KEY is unsafe; never block startup (Railway sets PORT)."""
+    weak = SECRET_KEY in _INSECURE_DEFAULTS or len(SECRET_KEY) < 32
+    if not weak:
+        return
+    print(
+        "ADVERTENCIA: SECRET_KEY insegura o corta. "
+        "En Railway → Variables del servicio web, define por ejemplo:\n"
+        "  SECRET_KEY=<clave-aleatoria-de-al-menos-32-caracteres>\n"
+        "Sin una clave propia, los tokens JWT no serán confiables en producción."
+    )
 
 
 def check_login_rate_limit(client_key: str) -> None:
