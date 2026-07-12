@@ -3,7 +3,6 @@ import api from "../api.js";
 import MentionText from "./MentionText.jsx";
 import { formatRelativeDate, formatTime, getInitials } from "../utils/format.js";
 
-// ── Avatar colors (consistent per user) ──────────────────────
 const AVATAR_COLORS = [
   ["#E01E5A", "#fff"],
   ["#ECB22E", "#1d1d1d"],
@@ -14,12 +13,12 @@ const AVATAR_COLORS = [
   ["#9C51B6", "#fff"],
   ["#1264A3", "#fff"],
 ];
+
 function avatarColor(name = "") {
   const idx = (name.charCodeAt(0) || 0) % AVATAR_COLORS.length;
   return AVATAR_COLORS[idx];
 }
 
-// ── Group consecutive messages by same author (within 5 min) ─
 function groupMessages(messages) {
   const groups = [];
   let cur = null;
@@ -41,12 +40,14 @@ function groupMessages(messages) {
 
 function groupByDate(messages) {
   const sections = [];
-  let curDate = null, curGroups = [];
+  let curDate = null;
+  let curGroups = [];
   groupMessages(messages).forEach((g) => {
     const d = new Date(g.messages[0].created_at).toDateString();
     if (d !== curDate) {
       if (curGroups.length) sections.push({ date: curDate, groups: curGroups });
-      curDate = d; curGroups = [g];
+      curDate = d;
+      curGroups = [g];
     } else {
       curGroups.push(g);
     }
@@ -55,28 +56,17 @@ function groupByDate(messages) {
   return sections;
 }
 
-// ── Hover action toolbar ──────────────────────────────────────
-function MessageActions({ message, isMine, onEdit, onDelete }) {
+function MessageActions({ canManage, onEdit, onDelete }) {
   return (
     <div className="msg-actions">
-      {/* React with emoji */}
-      <button type="button" className="msg-action-btn" title="Reaccionar">
-        <span>😊</span>
-      </button>
-      {/* Reply / thread placeholder */}
-      <button type="button" className="msg-action-btn" title="Responder">
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-        </svg>
-      </button>
-      {isMine && (
+      {canManage && (
         <>
-          <button type="button" className="msg-action-btn" title="Editar" onClick={() => onEdit(message)}>
+          <button type="button" className="msg-action-btn" title="Editar" onClick={onEdit}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
-          <button type="button" className="msg-action-btn" title="Eliminar" onClick={() => onDelete(message.id)}>
+          <button type="button" className="msg-action-btn" title="Eliminar" onClick={onDelete}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
@@ -87,14 +77,19 @@ function MessageActions({ message, isMine, onEdit, onDelete }) {
   );
 }
 
-// ── Edit inline ───────────────────────────────────────────────
 function EditInput({ initialContent, onSave, onCancel }) {
   const [value, setValue] = useState(initialContent);
   const ref = useRef(null);
-  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSave(value.trim()); }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSave(value.trim());
+    }
     if (e.key === "Escape") onCancel();
   };
 
@@ -118,29 +113,59 @@ function EditInput({ initialContent, onSave, onCancel }) {
   );
 }
 
-export default function MessageList({ messages, currentUserId }) {
+export default function MessageList({
+  messages,
+  currentUserId,
+  currentUserRole,
+  currentUsername,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+}) {
   const containerRef = useRef(null);
   const shouldStick = useRef(true);
+  const loadingMoreRef = useRef(false);
+  const pendingScrollAdjust = useRef(null);
   const [showJump, setShowJump] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
   const sections = useMemo(() => groupByDate(messages), [messages]);
+  const isManager = currentUserRole === "gerencia";
+
+  useEffect(() => {
+    loadingMoreRef.current = loadingMore;
+  }, [loadingMore]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || pendingScrollAdjust.current == null) return;
+    const prevHeight = pendingScrollAdjust.current;
+    pendingScrollAdjust.current = null;
+    el.scrollTop = el.scrollHeight - prevHeight;
+  }, [messages]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+
     const onScroll = () => {
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
       shouldStick.current = dist < 80;
       setShowJump(dist > 200);
+
+      if (el.scrollTop < 80 && hasMore && !loadingMoreRef.current && onLoadMore) {
+        pendingScrollAdjust.current = el.scrollHeight;
+        onLoadMore();
+      }
     };
+
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [hasMore, onLoadMore]);
 
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || !shouldStick.current) return;
+    if (!el || !shouldStick.current || pendingScrollAdjust.current != null) return;
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
@@ -156,14 +181,19 @@ export default function MessageList({ messages, currentUserId }) {
     if (!newContent) return;
     try {
       await api.patch(`/api/messages/${msgId}`, { content: newContent });
-    } catch {/* error handled by WS update */}
+    } catch {
+      /* WS update handles refresh */
+    }
     setEditingId(null);
   };
 
   const handleDelete = async (msgId) => {
+    if (!window.confirm("¿Eliminar este mensaje?")) return;
     try {
       await api.delete(`/api/messages/${msgId}`);
-    } catch {/* silent */}
+    } catch {
+      /* silent */
+    }
   };
 
   if (messages.length === 0) {
@@ -183,9 +213,14 @@ export default function MessageList({ messages, currentUserId }) {
   return (
     <div className="relative flex-1">
       <div ref={containerRef} className="absolute inset-0 overflow-y-auto">
+        {loadingMore && (
+          <div className="flex justify-center py-3">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[rgba(255,255,255,0.1)] border-t-[#9B9EA4]" />
+          </div>
+        )}
+
         {sections.map((section) => (
           <div key={section.date}>
-            {/* ── Date divider ── */}
             <div className="date-divider">
               <span>{formatRelativeDate(section.groups[0].messages[0].created_at)}</span>
             </div>
@@ -197,6 +232,7 @@ export default function MessageList({ messages, currentUserId }) {
                   {group.messages.map((msg, idx) => {
                     const isFirst = idx === 0;
                     const isMine = msg.sender_id === currentUserId;
+                    const canManage = isMine || isManager;
                     const isEditing = editingId === msg.id;
 
                     return (
@@ -204,7 +240,6 @@ export default function MessageList({ messages, currentUserId }) {
                         key={msg.id}
                         className={`message-row group ${isFirst ? "message-row-first" : ""}`}
                       >
-                        {/* Avatar or time gutter */}
                         {isFirst ? (
                           <span
                             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[13px] font-black"
@@ -220,7 +255,6 @@ export default function MessageList({ messages, currentUserId }) {
                           </span>
                         )}
 
-                        {/* Content */}
                         <div className="min-w-0 flex-1 pb-0.5">
                           {isFirst && (
                             <div className="flex flex-wrap items-baseline gap-2 leading-none">
@@ -241,7 +275,7 @@ export default function MessageList({ messages, currentUserId }) {
                             />
                           ) : (
                             <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-[22px] text-[#D1D2D3]">
-                              <MentionText text={msg.content} currentUserId={currentUserId} />
+                              <MentionText text={msg.content} currentUsername={currentUsername} />
                               {msg.edited_at && (
                                 <span className="ml-1 text-xs text-[#6B6F76]">(editado)</span>
                               )}
@@ -249,13 +283,11 @@ export default function MessageList({ messages, currentUserId }) {
                           )}
                         </div>
 
-                        {/* Hover action bar */}
-                        {!isEditing && (
+                        {!isEditing && canManage && (
                           <MessageActions
-                            message={msg}
-                            isMine={isMine}
+                            canManage={canManage}
                             onEdit={() => setEditingId(msg.id)}
-                            onDelete={handleDelete}
+                            onDelete={() => handleDelete(msg.id)}
                           />
                         )}
                       </div>
@@ -267,7 +299,6 @@ export default function MessageList({ messages, currentUserId }) {
           </div>
         ))}
 
-        {/* Bottom padding */}
         <div className="h-4" />
       </div>
 

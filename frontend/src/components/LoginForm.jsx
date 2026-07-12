@@ -114,19 +114,10 @@ export default function LoginForm({ onLogin }) {
           </button>
         </form>
 
-        <div className="mt-6 border-t border-[rgba(255,255,255,0.08)] pt-5 text-center text-[13px] text-[#9B9EA4]">
-          <p>Usuarios disponibles:</p>
-          <p className="mt-1 font-mono text-[12px] text-[#D1D2D3]">
-            juan · carlos · laura · miguel · sofia · andres
-          </p>
-          <p className="mt-1 font-mono text-[12px] text-[#D1D2D3]">
-            Contraseña: <span className="text-[#2BAC76]">nanotronics123</span>
-          </p>
-        </div>
       </div>
 
       <p className="mt-6 text-[12px] text-[#6B6F76]">
-        © 2025 Nanotronics · Electrónica Colombia
+        © 2026 Nanotronics · Electrónica Colombia
       </p>
     </div>
   );

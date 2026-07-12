@@ -39,16 +39,19 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             if event_type == "typing":
                 channel_id = data.get("channel_id")
                 if channel_id is not None:
-                    await manager.broadcast_to_channel(
-                        int(channel_id),
-                        {
-                            "type": "typing",
-                            "channel_id": int(channel_id),
-                            "user_id": user_id,
-                            "display_name": display_name,
-                        },
-                        exclude_user_id=user_id,
-                    )
+                    cid = int(channel_id)
+                    members = manager.channel_members.get(cid, set())
+                    if user_id in members:
+                        await manager.broadcast_to_channel(
+                            cid,
+                            {
+                                "type": "typing",
+                                "channel_id": cid,
+                                "user_id": user_id,
+                                "display_name": display_name,
+                            },
+                            exclude_user_id=user_id,
+                        )
     except WebSocketDisconnect:
         pass
     finally:

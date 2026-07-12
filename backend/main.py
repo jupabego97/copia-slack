@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from auth import assert_secure_secret
 from database import Base, engine
 from routers import auth, channels, dms, message_actions, messages, notifications, search, users, ws
 from seed import run_startup
@@ -23,6 +24,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    assert_secure_secret()
     await run_startup()
     yield
 

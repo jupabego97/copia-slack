@@ -205,12 +205,18 @@ async def _populate_seed_data(db, force: bool = False) -> bool:
     await db.commit()
     await manager.refresh_channel_memberships(db)
     print("Seed completado.")
-    print(f"Contraseña inicial de todos los usuarios: {DEFAULT_PASSWORD}")
+    is_deployed = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PORT"))
+    if not is_deployed:
+        print(f"Contraseña inicial de todos los usuarios: {DEFAULT_PASSWORD}")
+    else:
+        print("Usuarios seed creados. Cambia las contraseñas antes de uso real.")
     return True
 
 
 async def run_startup() -> None:
-    if "localhost" in DATABASE_URL and not (
+    if DATABASE_URL.startswith("sqlite"):
+        print(f"Usando SQLite local para demo: {DATABASE_URL}")
+    elif "localhost" in DATABASE_URL and not (
         os.getenv("DATABASE_URL")
         or os.getenv("DATABASE_PUBLIC_URL")
         or os.getenv("POSTGRES_URL")

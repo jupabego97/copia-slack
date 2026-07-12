@@ -1,4 +1,6 @@
 import os
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -11,12 +13,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models import User
 
+_INSECURE_DEFAULTS = {"change-me-in-production", "nanotronics-dev-secret", "nanotronics-dev-secret-change-in-production"}
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
+
+# Simple in-memory login rate limit: max attempts per IP window
+_LOGIN_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
+_LOGIN_MAX_ATTEMPTS = 8
+_LOGIN_WINDOW_SECONDS = 60
+
+
+def assert_secure_secret() -> None:
+    """Warn or fail when SECRET_KEY is unsafe in deployed environments."""
+    is_deployed = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PORT"))
+    if SECRET_KEY in _INSECURE_DEFAULTS:
+        msg = "SECRET_KEY insegura o por defecto. Define una clave larga y aleatoria."
+        if is_deployed:
+            raise RuntimeError(msg)
+        print(f"ADVERTENCIA: {msg}")
+
+
+def check_login_rate_limit(client_key: str) -> None:
+    now = time.time()
+    window_start = now - _LOGIN_WINDOW_SECONDS
+    attempts = [t for t in _LOGIN_ATTEMPTS[client_key] if t >= window_start]
+    _LOGIN_ATTEMPTS[client_key] = attempts
+    if len(attempts) >= _LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos de login. Espera un minuto e intenta de nuevo.",
+        )
+
+
+def record_login_attempt(client_key: str) -> None:
+    _LOGIN_ATTEMPTS[client_key].append(time.time())
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

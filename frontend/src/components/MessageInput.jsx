@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import socket from "../socket.js";
 
-// ── Toolbar icon button ───────────────────────────────────────
 function ToolBtn({ title, onClick, children }) {
   return (
     <button
@@ -19,6 +18,8 @@ export default function MessageInput({
   channelId,
   channelName,
   dmTarget,
+  members = [],
+  currentUserId,
   onSend,
   readOnly = false,
   typingUsers = [],
@@ -26,16 +27,18 @@ export default function MessageInput({
 }) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef(null);
   const typingTimeout = useRef(null);
 
-  // Reset on channel change
   useEffect(() => {
     setContent("");
+    setMentionOpen(false);
     textareaRef.current?.focus();
   }, [channelId]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -43,17 +46,67 @@ export default function MessageInput({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [content]);
 
+  const mentionCandidates = useMemo(() => {
+    if (!mentionOpen) return [];
+    const q = mentionQuery.toLowerCase();
+    return members
+      .filter((m) => m.id !== currentUserId)
+      .filter(
+        (m) =>
+          !q ||
+          m.username.toLowerCase().includes(q) ||
+          m.display_name.toLowerCase().includes(q)
+      )
+      .slice(0, 6);
+  }, [mentionOpen, mentionQuery, members, currentUserId]);
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionQuery, mentionOpen]);
+
+  const detectMention = (value, cursor) => {
+    const before = value.slice(0, cursor);
+    const match = before.match(/(^|\s)@([a-zA-Z0-9_]*)$/);
+    if (!match) {
+      setMentionOpen(false);
+      setMentionQuery("");
+      return;
+    }
+    setMentionOpen(true);
+    setMentionQuery(match[2] || "");
+  };
+
+  const insertMention = (username) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const cursor = el.selectionStart;
+    const before = content.slice(0, cursor);
+    const after = content.slice(cursor);
+    const replaced = before.replace(/(^|\s)@([a-zA-Z0-9_]*)$/, `$1@${username} `);
+    setContent(replaced + after);
+    setMentionOpen(false);
+    setMentionQuery("");
+    setTimeout(() => {
+      el.focus();
+      const pos = replaced.length;
+      el.setSelectionRange(pos, pos);
+    }, 0);
+  };
+
   const emitTyping = () => {
     if (!channelId) return;
     socket.sendTyping(channelId);
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    typingTimeout.current = setTimeout(() => { typingTimeout.current = null; }, 1200);
+    typingTimeout.current = setTimeout(() => {
+      typingTimeout.current = null;
+    }, 1200);
   };
 
   const handleSubmit = async () => {
     const trimmed = content.trim();
     if (!trimmed || sending || readOnly) return;
     setSending(true);
+    setMentionOpen(false);
     try {
       await onSend(trimmed);
       setContent("");
@@ -64,13 +117,35 @@ export default function MessageInput({
   };
 
   const handleKeyDown = (e) => {
+    if (mentionOpen && mentionCandidates.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionCandidates.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(mentionCandidates[mentionIndex].username);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionOpen(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
   };
 
-  // ── Format helpers ────────────────────────────────────────
   const wrap = (before, after = before) => {
     const el = textareaRef.current;
     if (!el) return;
@@ -101,7 +176,6 @@ export default function MessageInput({
 
   return (
     <div className="shrink-0 px-4 pb-4 pt-2" style={{ background: "#222529" }}>
-      {/* Typing indicator */}
       {typingLabel && (
         <div className="mb-1 flex items-center gap-1.5 px-1">
           <span className="flex gap-0.5">
@@ -117,9 +191,7 @@ export default function MessageInput({
         </div>
       )}
 
-      {error && (
-        <p className="mb-1 px-1 text-sm text-red-400">{error}</p>
-      )}
+      {error && <p className="mb-1 px-1 text-sm text-red-400">{error}</p>}
 
       {readOnly ? (
         <div className="flex items-center gap-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.04)] px-4 py-3 text-sm text-[#9B9EA4]">
@@ -129,8 +201,33 @@ export default function MessageInput({
           Solo gerencia puede publicar en <span className="font-semibold text-[#D1D2D3]">#avisos</span>
         </div>
       ) : (
-        <div className="composer-box">
-          {/* ── Top toolbar ── */}
+        <div className="composer-box relative">
+          {mentionOpen && mentionCandidates.length > 0 && (
+            <div className="absolute bottom-full left-0 right-0 mb-1 overflow-hidden rounded-lg border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] shadow-xl">
+              <p className="border-b border-[rgba(255,255,255,0.08)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-[#9B9EA4]">
+                Mencionar
+              </p>
+              {mentionCandidates.map((user, idx) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    insertMention(user.username);
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] transition ${
+                    idx === mentionIndex
+                      ? "bg-[rgba(255,255,255,0.1)] text-white"
+                      : "text-[#D1D2D3] hover:bg-[rgba(255,255,255,0.06)]"
+                  }`}
+                >
+                  <span className="font-bold">@{user.username}</span>
+                  <span className="text-[#9B9EA4]">{user.display_name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-0.5 border-b border-[rgba(255,255,255,0.08)] px-2 py-1.5">
             <ToolBtn title="Negrita (Ctrl+B)" onClick={() => wrap("**")}>
               <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
@@ -155,32 +252,37 @@ export default function MessageInput({
 
             <span className="mx-1 h-4 w-px bg-[rgba(255,255,255,0.1)]" />
 
-            <ToolBtn title="Lista numerada" onClick={() => setContent((v) => v + "\n1. ")}>
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 5h2V3H3v2zm0 4h2V7H3v2zm0 4h2v-2H3v2zm4-8h14V3H7v2zm0 4h14V7H7v2zm0 4h14v-2H7v2z" />
-              </svg>
-            </ToolBtn>
-            <ToolBtn title="Lista con viñetas" onClick={() => setContent((v) => v + "\n• ")}>
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4zM2 6a1 1 0 110-2 1 1 0 010 2zm0 5a1 1 0 110-2 1 1 0 010 2zm0 5a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </ToolBtn>
-
-            <span className="mx-1 h-4 w-px bg-[rgba(255,255,255,0.1)]" />
-
-            <ToolBtn title="Mencionar a alguien" onClick={() => { setContent((v) => v + "@"); textareaRef.current?.focus(); }}>
+            <ToolBtn
+              title="Mencionar a alguien"
+              onClick={() => {
+                const el = textareaRef.current;
+                const next = `${content}@`;
+                setContent(next);
+                setMentionOpen(true);
+                setMentionQuery("");
+                setTimeout(() => {
+                  el?.focus();
+                  const pos = next.length;
+                  el?.setSelectionRange(pos, pos);
+                }, 0);
+              }}
+            >
               <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10h5v-2h-5c-4.34 0-8-3.66-8-8s3.66-8 8-8 8 3.66 8 8v1.43c0 .79-.71 1.57-1.5 1.57s-1.5-.78-1.5-1.57V12c0-2.76-2.24-5-5-5s-5 2.24-5 5 2.24 5 5 5c1.38 0 2.64-.56 3.54-1.47.65.89 1.77 1.47 2.96 1.47C19.05 22 21 20.05 21 17.43V12c0-5.52-4.48-10-9-10zm0 13c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
               </svg>
             </ToolBtn>
           </div>
 
-          {/* ── Textarea ── */}
           <div className="px-3 py-2.5">
             <textarea
               ref={textareaRef}
               value={content}
-              onChange={(e) => { setContent(e.target.value); emitTyping(); }}
+              onChange={(e) => {
+                const value = e.target.value;
+                setContent(value);
+                emitTyping();
+                detectMention(value, e.target.selectionStart);
+              }}
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder={placeholder}
@@ -189,24 +291,15 @@ export default function MessageInput({
             />
           </div>
 
-          {/* ── Bottom bar ── */}
           <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.08)] px-3 py-2">
             <div className="flex items-center gap-0.5">
-              {/* Attachment placeholder */}
-              <ToolBtn title="Adjuntar archivo">
+              <ToolBtn title="Adjuntar archivo (próximamente)">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                 </svg>
               </ToolBtn>
-              {/* Emoji placeholder */}
-              <ToolBtn title="Insertar emoji">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </ToolBtn>
             </div>
 
-            {/* Send button */}
             <button
               type="button"
               onClick={handleSubmit}

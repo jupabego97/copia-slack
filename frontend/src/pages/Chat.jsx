@@ -14,6 +14,8 @@ export default function Chat({ user, onLogout }) {
   const [activeChannelId, setActiveChannelId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [sendError, setSendError] = useState("");
   const [typingByChannel, setTypingByChannel] = useState({});
@@ -25,6 +27,12 @@ export default function Chat({ user, onLogout }) {
   const typingTimers = useRef({});
   const activeChannelIdRef = useRef(null);
   const hasLoadedChannels = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const messagesRef = useRef([]);
+  const hasMoreRef = useRef(false);
+
+  messagesRef.current = messages;
+  hasMoreRef.current = hasMoreMessages;
 
   const activeChannel = useMemo(
     () => channels.find((ch) => ch.id === activeChannelId) || null,
@@ -83,17 +91,46 @@ export default function Chat({ user, onLogout }) {
     if (!channelId) return;
     setLoadingMessages(true);
     setSendError("");
+    setHasMoreMessages(false);
     try {
       const res = await api.get(`/api/channels/${channelId}/messages`, { params: { limit: 50 } });
       setMessages(res.data);
+      setHasMoreMessages(res.data.length >= 50);
       await markChannelRead(channelId);
     } catch (err) {
       setMessages([]);
+      setHasMoreMessages(false);
       setLoadError(getErrorMessage(err, "No se pudieron cargar los mensajes."));
     } finally {
       setLoadingMessages(false);
     }
   }, [markChannelRead]);
+
+  const loadMoreMessages = useCallback(async () => {
+    const channelId = activeChannelIdRef.current;
+    if (!channelId || loadingMoreRef.current || !hasMoreRef.current) return;
+    const oldestId = messagesRef.current[0]?.id;
+    if (!oldestId) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const res = await api.get(`/api/channels/${channelId}/messages`, {
+        params: { limit: 50, before_id: oldestId },
+      });
+      setMessages((prev) => {
+        const existing = new Set(prev.map((m) => m.id));
+        const older = res.data.filter((m) => !existing.has(m.id));
+        return [...older, ...prev];
+      });
+      setHasMoreMessages(res.data.length >= 50);
+    } catch {
+      /* keep current messages */
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, []);
 
   useEffect(() => { loadChannels(); loadNotificationCount(); }, [loadChannels, loadNotificationCount]);
 
@@ -296,13 +333,23 @@ export default function Chat({ user, onLogout }) {
             </div>
           </div>
         ) : (
-          <MessageList messages={messages} currentUserId={user.id} currentUserRole={user.role} />
+          <MessageList
+            messages={messages}
+            currentUserId={user.id}
+            currentUserRole={user.role}
+            currentUsername={user.username}
+            hasMore={hasMoreMessages}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreMessages}
+          />
         )}
 
         <MessageInput
           channelId={activeChannelId}
           channelName={activeChannel?.is_direct_message ? null : activeChannel?.name}
           dmTarget={activeChannel?.is_direct_message ? getChannelTitle(activeChannel, user.id) : null}
+          members={activeChannel?.members || []}
+          currentUserId={user.id}
           onSend={handleSend}
           readOnly={readOnly}
           typingUsers={typingUsers}
