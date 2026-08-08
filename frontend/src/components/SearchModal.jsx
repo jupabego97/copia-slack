@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api, { getErrorMessage } from "../api.js";
 import { getInitials } from "../utils/format.js";
 import { highlightText } from "../utils/highlight.jsx";
@@ -11,11 +11,12 @@ function avatarColor(name = "") {
   return AVATAR_COLORS[(name.charCodeAt(0) || 0) % AVATAR_COLORS.length];
 }
 
-export default function SearchModal({ open, onClose, onSelectChannel, onSelectUser }) {
+export default function SearchModal({ open, onClose, onSelectChannel, onSelectUser, onSelectMessage }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState({ channels: [], users: [], messages: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -42,6 +43,40 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
     return () => clearTimeout(timer);
   }, [open, query]);
 
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, results.channels.length, results.users.length, results.messages.length]);
+
+  const resultItems = useMemo(() => [
+    ...results.channels.map((item) => ({ type: "channel", item })),
+    ...results.users.map((item) => ({ type: "user", item })),
+    ...results.messages.map((item) => ({ type: "message", item })),
+  ], [results]);
+
+  const selectResult = (result) => {
+    if (!result) return;
+    if (result.type === "channel") onSelectChannel(result.item.id);
+    if (result.type === "user") onSelectUser(result.item.id);
+    if (result.type === "message") onSelectMessage?.(result.item);
+    onClose();
+  };
+
+  const handleSearchKeyDown = (event) => {
+    if (!resultItems.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % resultItems.length);
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => (index - 1 + resultItems.length) % resultItems.length);
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      selectResult(resultItems[activeIndex]);
+    }
+  };
+
   if (!open) return null;
 
   const hasResults = results.channels.length > 0 || results.users.length > 0 || results.messages.length > 0;
@@ -65,6 +100,7 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="Buscar en Nanotronics Chat"
             className="flex-1 bg-transparent text-[16px] text-[#D1D2D3] outline-none placeholder:text-[#6B6F76]"
           />
@@ -72,6 +108,7 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
             <button
               type="button"
               onClick={() => setQuery("")}
+              aria-label="Limpiar búsqueda"
               className="flex h-5 w-5 items-center justify-center rounded-full bg-[rgba(255,255,255,0.1)] text-[#9B9EA4] hover:text-white transition"
             >
               <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -106,12 +143,12 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
           {results.channels.length > 0 && (
             <section className="mb-2">
               <p className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#9B9EA4]">Canales</p>
-              {results.channels.map((ch) => (
+              {results.channels.map((ch, index) => (
                 <button
                   key={`ch-${ch.id}`}
                   type="button"
-                  onClick={() => { onSelectChannel(ch.id); onClose(); }}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[rgba(255,255,255,0.06)] transition"
+                  onClick={() => selectResult({ type: "channel", item: ch })}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${activeIndex === index ? "bg-white/10" : "hover:bg-[rgba(255,255,255,0.06)]"}`}
                 >
                   <span className="flex h-7 w-7 items-center justify-center rounded bg-[rgba(255,255,255,0.08)] text-[15px] font-bold text-[#9B9EA4]">#</span>
                   <span className="text-[14px] text-[#D1D2D3]">{highlightText(ch.name, query)}</span>
@@ -124,14 +161,15 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
           {results.users.length > 0 && (
             <section className="mb-2">
               <p className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#9B9EA4]">Personas</p>
-              {results.users.map((u) => {
+              {results.users.map((u, index) => {
                 const [bg, fg] = avatarColor(u.display_name);
+                const resultIndex = results.channels.length + index;
                 return (
                   <button
                     key={`u-${u.id}`}
                     type="button"
-                    onClick={() => { onSelectUser(u.id); onClose(); }}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-[rgba(255,255,255,0.06)] transition"
+                    onClick={() => selectResult({ type: "user", item: u })}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${activeIndex === resultIndex ? "bg-white/10" : "hover:bg-[rgba(255,255,255,0.06)]"}`}
                   >
                     <span
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-black"
@@ -156,12 +194,14 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
           {results.messages.length > 0 && (
             <section>
               <p className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#9B9EA4]">Mensajes</p>
-              {results.messages.map((msg) => (
+              {results.messages.map((msg, index) => {
+                const resultIndex = results.channels.length + results.users.length + index;
+                return (
                 <button
                   key={`msg-${msg.id}`}
                   type="button"
-                  onClick={() => { onSelectChannel(msg.channel_id); onClose(); }}
-                  className="flex w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left hover:bg-[rgba(255,255,255,0.06)] transition"
+                  onClick={() => selectResult({ type: "message", item: msg })}
+                  className={`flex w-full flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left transition ${activeIndex === resultIndex ? "bg-white/10" : "hover:bg-[rgba(255,255,255,0.06)]"}`}
                 >
                   <div className="flex items-center gap-1.5 text-[12px] text-[#9B9EA4]">
                     <span className="font-bold text-[#D1D2D3]">{msg.sender.display_name}</span>
@@ -172,7 +212,8 @@ export default function SearchModal({ open, onClose, onSelectChannel, onSelectUs
                     {highlightText(msg.content, query)}
                   </p>
                 </button>
-              ))}
+                );
+              })}
             </section>
           )}
         </div>

@@ -105,10 +105,17 @@ body {
 
 /* ─── Hover action toolbar ───────────────────────────────── */
 .msg-actions {
-  @apply absolute right-4 -top-4 hidden items-center rounded-md border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] shadow-lg;
+  @apply absolute right-4 -top-4 flex items-center rounded-md border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] shadow-lg opacity-0 pointer-events-none transition-opacity;
 }
 .message-row:hover .msg-actions {
-  @apply flex;
+  @apply opacity-100 pointer-events-auto;
+}
+.message-row:focus-within .msg-actions {
+  @apply opacity-100 pointer-events-auto;
+}
+.message-highlighted {
+  background: rgba(54, 197, 240, 0.12);
+  box-shadow: inset 3px 0 0 #36c5f0;
 }
 .msg-action-btn {
   @apply flex h-8 w-8 items-center justify-center text-base text-[#9B9EA4] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors;
@@ -118,6 +125,13 @@ body {
 }
 .msg-action-btn:last-child {
   @apply rounded-r-md;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  @apply outline outline-2 outline-offset-2 outline-[#36C5F0];
 }
 
 /* ─── Mention highlight ──────────────────────────────────── */

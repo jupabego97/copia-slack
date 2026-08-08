@@ -114,6 +114,23 @@ class Message(Base):
 
     channel: Mapped["Channel"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(back_populates="messages")
+    reactions: Mapped[list["MessageReaction"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class MessageReaction(Base):
+    __tablename__ = "message_reactions"
+    __table_args__ = (UniqueConstraint("message_id", "user_id", "emoji", name="uq_message_user_emoji"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    emoji: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    message: Mapped["Message"] = relationship(back_populates="reactions")
 
 
 class Notification(Base):

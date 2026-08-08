@@ -56,17 +56,24 @@ function groupByDate(messages) {
   return sections;
 }
 
-function MessageActions({ canManage, onEdit, onDelete }) {
+const REACTION_OPTIONS = ["👍", "❤️", "✅", "👀"];
+
+function MessageActions({ canManage, onReply, onEdit, onDelete }) {
   return (
     <div className="msg-actions">
+      <button type="button" className="msg-action-btn" title="Responder citando" aria-label="Responder citando" onClick={onReply}>
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 17l-5-5m0 0l5-5m-5 5h11a4 4 0 014 4v1" />
+        </svg>
+      </button>
       {canManage && (
         <>
-          <button type="button" className="msg-action-btn" title="Editar" onClick={onEdit}>
+          <button type="button" className="msg-action-btn" title="Editar" aria-label="Editar mensaje" onClick={onEdit}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
-          <button type="button" className="msg-action-btn" title="Eliminar" onClick={onDelete}>
+          <button type="button" className="msg-action-btn" title="Eliminar" aria-label="Eliminar mensaje" onClick={onDelete}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
@@ -121,6 +128,12 @@ export default function MessageList({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  highlightedMessageId = null,
+  unreadBoundaryId = null,
+  newMessageCount = 0,
+  onReachBottom,
+  onReply,
+  onToggleReaction,
 }) {
   const containerRef = useRef(null);
   const shouldStick = useRef(true);
@@ -152,6 +165,7 @@ export default function MessageList({
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
       shouldStick.current = dist < 80;
       setShowJump(dist > 200);
+      if (dist < 80) onReachBottom?.();
 
       if (el.scrollTop < 80 && hasMore && !loadingMoreRef.current && onLoadMore) {
         pendingScrollAdjust.current = el.scrollHeight;
@@ -159,9 +173,15 @@ export default function MessageList({
       }
     };
 
-    el.addEventListener("scroll", onScroll);
+    el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, [hasMore, onLoadMore]);
+  }, [hasMore, onLoadMore, onReachBottom]);
+
+  useEffect(() => {
+    if (!highlightedMessageId) return;
+    const target = containerRef.current?.querySelector(`[data-message-id="${highlightedMessageId}"]`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedMessageId, messages]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -175,6 +195,13 @@ export default function MessageList({
     el.scrollTop = el.scrollHeight;
     shouldStick.current = true;
     setShowJump(false);
+    onReachBottom?.();
+  };
+
+  const shouldShowUnreadBefore = (messageId) => {
+    const index = messages.findIndex((message) => message.id === messageId);
+    if (index < 0) return false;
+    return unreadBoundaryId == null ? index === 0 : messages[index - 1]?.id === unreadBoundaryId;
   };
 
   const handleEdit = async (msgId, newContent) => {
@@ -236,10 +263,18 @@ export default function MessageList({
                     const isEditing = editingId === msg.id;
 
                     return (
-                      <div
-                        key={msg.id}
-                        className={`message-row group ${isFirst ? "message-row-first" : ""}`}
-                      >
+                      <div key={msg.id}>
+                        {shouldShowUnreadBefore(msg.id) && (
+                          <div className="mx-5 my-3 flex items-center gap-3 text-[11px] font-extrabold uppercase tracking-wider text-[#36C5F0]" role="separator">
+                            <span className="h-px flex-1 bg-[#36C5F0]/30" />
+                            <span>Nuevos mensajes</span>
+                            <span className="h-px flex-1 bg-[#36C5F0]/30" />
+                          </div>
+                        )}
+                        <div
+                          data-message-id={msg.id}
+                          className={`message-row group ${isFirst ? "message-row-first" : ""} ${highlightedMessageId === msg.id ? "message-highlighted" : ""}`}
+                        >
                         {isFirst ? (
                           <span
                             className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[13px] font-black"
@@ -281,15 +316,35 @@ export default function MessageList({
                               )}
                             </p>
                           )}
+                          {!isEditing && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              {REACTION_OPTIONS.map((emoji) => {
+                                const reaction = (msg.reactions || []).find((item) => item.emoji === emoji);
+                                return (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    onClick={() => onToggleReaction?.(msg.id, emoji)}
+                                    aria-label={`${reaction?.user_reacted ? "Quitar" : "Añadir"} reacción ${emoji}`}
+                                    className={`rounded-full border px-2 py-0.5 text-xs transition ${reaction?.user_reacted ? "border-[#36C5F0]/70 bg-[#36C5F0]/15 text-white" : "border-white/10 text-[#9B9EA4] hover:border-white/25 hover:bg-white/5"}`}
+                                  >
+                                    {emoji}{reaction?.count ? ` ${reaction.count}` : ""}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         {!isEditing && canManage && (
                           <MessageActions
                             canManage={canManage}
+                            onReply={() => onReply?.(msg)}
                             onEdit={() => setEditingId(msg.id)}
                             onDelete={() => handleDelete(msg.id)}
                           />
                         )}
+                        </div>
                       </div>
                     );
                   })}
@@ -306,8 +361,12 @@ export default function MessageList({
         <button
           type="button"
           onClick={jumpToBottom}
+          aria-label="Ir a los últimos mensajes"
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-[rgba(255,255,255,0.13)] bg-[#1A1D21] px-4 py-2 text-[13px] font-semibold text-[#D1D2D3] shadow-xl hover:bg-[#222529] transition"
         >
+          {newMessageCount > 0 && (
+            <span>{newMessageCount} nuevo{newMessageCount === 1 ? "" : "s"}</span>
+          )}
           <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>

@@ -1,5 +1,7 @@
 import axios from "axios";
 
+let authExpiredHandler = null;
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "",
 });
@@ -17,10 +19,18 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
+      authExpiredHandler?.();
     }
     return Promise.reject(error);
   }
 );
+
+export function setAuthExpiredHandler(handler) {
+  authExpiredHandler = handler;
+  return () => {
+    if (authExpiredHandler === handler) authExpiredHandler = null;
+  };
+}
 
 export function getErrorMessage(error, fallback) {
   const detail = error.response?.data?.detail;
