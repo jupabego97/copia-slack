@@ -35,6 +35,16 @@ class MessageUpdate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
 
 
+class ReactionCreate(BaseModel):
+    emoji: str = Field(min_length=1, max_length=16)
+
+
+class ReactionOut(BaseModel):
+    emoji: str
+    count: int
+    user_reacted: bool = False
+
+
 class MessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +55,13 @@ class MessageOut(BaseModel):
     created_at: datetime
     edited_at: datetime | None
     sender: UserOut
+    channel_name: str | None = None
+    reactions: list[ReactionOut] = []
+
+
+class ChannelCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=100)
+    description: str | None = Field(default=None, max_length=255)
 
 
 class ChannelOut(BaseModel):
@@ -58,6 +75,7 @@ class ChannelOut(BaseModel):
     created_at: datetime
     members: list[UserOut] = []
     unread_count: int = 0
+    last_read_message_id: int | None = None
     last_message: MessageOut | None = None
 
 

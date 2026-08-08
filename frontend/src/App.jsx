@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import api from "./api.js";
+import api, { setAuthExpiredHandler } from "./api.js";
 import Chat from "./pages/Chat.jsx";
 import LoginForm from "./components/LoginForm.jsx";
 import socket from "./socket.js";
@@ -32,6 +32,12 @@ export default function App() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => setAuthExpiredHandler(() => {
+    socket.disconnect();
+    setUser(null);
+    setLoading(false);
+  }), []);
 
   const handleLogin = (loggedUser, token) => {
     localStorage.setItem("token", token);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import api, { getErrorMessage } from "../api.js";
 import { formatTime } from "../utils/format.js";
 
-export default function NotificationPanel({ open, onClose, onOpenChannel }) {
+export default function NotificationPanel({ open, onClose, onOpenChannel, onOpenMessage }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,7 +32,8 @@ export default function NotificationPanel({ open, onClose, onOpenChannel }) {
 
   const handleOpen = async (n) => {
     try { await api.post(`/api/notifications/${n.id}/read`); } catch {/* silent */}
-    onOpenChannel(n.channel_id);
+    if (onOpenMessage) onOpenMessage(n);
+    else onOpenChannel(n.channel_id);
     onClose();
   };
 
@@ -67,6 +68,7 @@ export default function NotificationPanel({ open, onClose, onOpenChannel }) {
           <button
             type="button"
             onClick={onClose}
+            aria-label="Cerrar notificaciones"
             className="flex h-6 w-6 items-center justify-center rounded text-[#9B9EA4] hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

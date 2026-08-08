@@ -6,6 +6,7 @@ function ToolBtn({ title, onClick, children }) {
     <button
       type="button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       className="flex h-7 w-7 items-center justify-center rounded text-[#9B9EA4] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#D1D2D3] transition"
     >
@@ -24,6 +25,8 @@ export default function MessageInput({
   readOnly = false,
   typingUsers = [],
   error = "",
+  replyingTo = null,
+  onCancelReply,
 }) {
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
@@ -108,7 +111,7 @@ export default function MessageInput({
     setSending(true);
     setMentionOpen(false);
     try {
-      await onSend(trimmed);
+      await onSend(trimmed, replyingTo);
       setContent("");
     } finally {
       setSending(false);
@@ -117,6 +120,17 @@ export default function MessageInput({
   };
 
   const handleKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      wrap("**");
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
+      e.preventDefault();
+      wrap("_");
+      return;
+    }
+
     if (mentionOpen && mentionCandidates.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -192,6 +206,18 @@ export default function MessageInput({
       )}
 
       {error && <p className="mb-1 px-1 text-sm text-red-400">{error}</p>}
+
+      {replyingTo && (
+        <div className="mb-1 flex items-start gap-2 rounded-lg border border-[#36C5F0]/25 bg-[#36C5F0]/10 px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-[#36C5F0]">Respondiendo a {replyingTo.sender.display_name}</p>
+            <p className="mt-0.5 truncate text-xs text-[#9B9EA4]">{replyingTo.content}</p>
+          </div>
+          <button type="button" onClick={onCancelReply} aria-label="Cancelar respuesta" className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#9B9EA4] hover:bg-white/10 hover:text-white">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      )}
 
       {readOnly ? (
         <div className="flex items-center gap-2.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.04)] px-4 py-3 text-sm text-[#9B9EA4]">
@@ -291,15 +317,7 @@ export default function MessageInput({
             />
           </div>
 
-          <div className="flex items-center justify-between border-t border-[rgba(255,255,255,0.08)] px-3 py-2">
-            <div className="flex items-center gap-0.5">
-              <ToolBtn title="Adjuntar archivo (próximamente)">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              </ToolBtn>
-            </div>
-
+          <div className="flex items-center justify-end border-t border-[rgba(255,255,255,0.08)] px-3 py-2">
             <button
               type="button"
               onClick={handleSubmit}

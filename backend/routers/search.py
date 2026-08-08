@@ -24,5 +24,5 @@ async def search(
     return SearchResults(
         channels=[await channel_to_out(db, channel, current_user.id) for channel in channels],
         users=[UserOut.model_validate(user) for user in users],
-        messages=[message_to_out(message) for message, _channel in message_rows],
+        messages=[message_to_out(message, channel.name, current_user.id) for message, channel in message_rows],
     )

@@ -7,12 +7,23 @@ from sqlalchemy.orm import selectinload
 
 from connection_manager import manager
 from models import Channel, ChannelMember, ChannelReadState, Message, Notification, NotificationType, User
-from schemas import ChannelOut, MessageOut, NotificationOut, UserOut
+from schemas import ChannelOut, MessageOut, NotificationOut, ReactionOut, UserOut
 
 MENTION_PATTERN = re.compile(r"@([a-zA-Z0-9_]+)")
 
 
-def message_to_out(message: Message) -> MessageOut:
+def message_to_out(
+    message: Message,
+    channel_name: str | None = None,
+    current_user_id: int | None = None,
+) -> MessageOut:
+    reaction_counts: dict[str, int] = {}
+    reacted_by_user: set[str] = set()
+    for reaction in getattr(message, "reactions", []) or []:
+        reaction_counts[reaction.emoji] = reaction_counts.get(reaction.emoji, 0) + 1
+        if current_user_id is not None and reaction.user_id == current_user_id:
+            reacted_by_user.add(reaction.emoji)
+
     return MessageOut(
         id=message.id,
         channel_id=message.channel_id,
@@ -21,6 +32,11 @@ def message_to_out(message: Message) -> MessageOut:
         created_at=message.created_at,
         edited_at=message.edited_at,
         sender=UserOut.model_validate(message.sender),
+        channel_name=channel_name,
+        reactions=[
+            ReactionOut(emoji=emoji, count=count, user_reacted=emoji in reacted_by_user)
+            for emoji, count in reaction_counts.items()
+        ],
     )
 
 
@@ -82,7 +98,8 @@ async def channel_to_out(db: AsyncSession, channel: Channel, user_id: int) -> Ch
         created_at=channel.created_at,
         members=[UserOut.model_validate(member.user) for member in channel.members],
         unread_count=unread_count,
-        last_message=message_to_out(last_message) if last_message else None,
+        last_read_message_id=last_read_id,
+        last_message=message_to_out(last_message, current_user_id=user_id) if last_message else None,
     )
 
 

@@ -20,7 +20,7 @@ async def update_message(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Message).where(Message.id == message_id).options(selectinload(Message.sender))
+        select(Message).where(Message.id == message_id).options(selectinload(Message.sender), selectinload(Message.reactions))
     )
     message = result.scalar_one_or_none()
     if message is None:
@@ -46,7 +46,7 @@ async def update_message(
 
     from connection_manager import manager
 
-    message_out = message_to_out(message)
+    message_out = message_to_out(message, current_user_id=current_user.id)
     await manager.broadcast_to_channel(
         message.channel_id,
         {

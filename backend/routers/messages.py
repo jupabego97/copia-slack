@@ -35,7 +35,7 @@ async def get_messages(
     query = (
         select(Message)
         .where(Message.channel_id == channel_id)
-        .options(selectinload(Message.sender))
+        .options(selectinload(Message.sender), selectinload(Message.reactions))
         .order_by(Message.id.desc())
         .limit(limit)
     )
@@ -45,7 +45,7 @@ async def get_messages(
 
     result = await db.execute(query)
     messages = list(reversed(result.scalars().all()))
-    return [message_to_out(message) for message in messages]
+    return [message_to_out(message, current_user_id=current_user.id) for message in messages]
 
 
 @router.post("/{channel_id}/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
@@ -86,4 +86,4 @@ async def create_message(
         await emit_notification(notification, current_user)
 
     await emit_new_message(message)
-    return message_to_out(message)
+    return message_to_out(message, current_user_id=current_user.id)

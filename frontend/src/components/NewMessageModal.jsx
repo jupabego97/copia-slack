@@ -11,7 +11,7 @@ function avatarColor(name = "") {
   return AVATAR_COLORS[(name.charCodeAt(0) || 0) % AVATAR_COLORS.length];
 }
 
-export default function NewMessageModal({ open, onClose, onOpenDm }) {
+export default function NewMessageModal({ open, onClose, onOpenDm, currentUserId }) {
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,7 @@ export default function NewMessageModal({ open, onClose, onOpenDm }) {
     return () => window.removeEventListener("keydown", esc);
   }, [open, onClose]);
 
-  const filtered = users.filter((u) => {
+  const filtered = users.filter((u) => u.id !== currentUserId).filter((u) => {
     const t = query.trim().toLowerCase();
     return !t || u.display_name.toLowerCase().includes(t) || u.username.toLowerCase().includes(t);
   });

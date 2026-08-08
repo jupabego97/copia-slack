@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from auth import assert_secure_secret
 from database import Base, engine
-from routers import auth, channels, dms, message_actions, messages, notifications, search, users, ws
+from routers import auth, channels, dms, message_actions, messages, notifications, reactions, search, users, ws
 from seed import run_startup
 
 ALLOWED_ORIGINS = [
@@ -56,6 +56,7 @@ app.include_router(auth.router)
 app.include_router(channels.router)
 app.include_router(messages.router)
 app.include_router(message_actions.router)
+app.include_router(reactions.router)
 app.include_router(dms.router)
 app.include_router(users.router)
 app.include_router(search.router)
